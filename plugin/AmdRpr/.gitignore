@@ -1,0 +1,10 @@
+Debug*/
+Release*/
+x64/
+.suo
+.db
+*.user
+*.db
+*.opendb
+.DS_Store
+.vs
