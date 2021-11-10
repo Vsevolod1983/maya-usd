@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{4D57DE09-53BC-4042-A500-FA931CD2141B}</ProjectGuid>
+    <RootNamespace>AmdRprUsd</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <TargetExt>.mll</TargetExt>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <SDLCheck>
+      </SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\Projects\maya-usdForked\maya-usd\build\build\RelWithDebInfo\include;C:\Projects\maya-usdForked\maya-usd\build\build\RelWithDebInfo\maya\include;C:\Program Files\Autodesk\Maya2022\include;C:\Autodesk\SDK\MAYA_2022_SDK\devkitBase\devkit\ufe\include;C:\Projects\USD\USDBuild\include;C:\Projects\USD\USDBuild\include\boost-1_70;C:\Users\vgadd\AppData\Local\Programs\Python\Python37\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <DisableSpecificWarnings>4244;4267;4273;4305;4506;4996;4180;4251</DisableSpecificWarnings>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PreprocessorDefinitions>NOMINMAX;MAYAUSD_PLUGIN_EXPORT=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>C:\Program Files\Autodesk\Maya2022\lib\Foundation.lib;C:\Program Files\Autodesk\Maya2022\lib\OpenMaya.lib;C:\Program Files\Autodesk\Maya2022\lib\OpenMayaRender.lib;C:\Autodesk\SDK\MAYA_2022_SDK\devkitBase\devkit\ufe\lib\ufe_2.lib;C:\Projects\USD\USDBuild\lib\usdImagingGL.lib;C:\Projects\USD\USDBuild\lib\hdx.lib;C:\Projects\USD\USDBuild\lib\hdSt.lib;C:\Projects\USD\USDBuild\lib\hgiGL.lib;C:\Projects\USD\USDBuild\lib\hdMtlx.lib;C:\Projects\USD\USDBuild\lib\MaterialXCore.lib;C:\Projects\USD\USDBuild\lib\MaterialXFormat.lib;C:\Projects\USD\USDBuild\lib\MaterialXGenGlsl.lib;C:\Projects\USD\USDBuild\lib\MaterialXGenOsl.lib;C:\Projects\USD\USDBuild\lib\MaterialXGenShader.lib;C:\Projects\USD\USDBuild\lib\MaterialXRender.lib;C:\Projects\USD\USDBuild\lib\MaterialXRenderGlsl.lib;C:\Projects\USD\USDBuild\lib\MaterialXRenderHw.lib;C:\Projects\USD\USDBuild\lib\MaterialXRenderOsl.lib;C:\Projects\USD\USDBuild\lib\hgiInterop.lib;C:\Projects\USD\USDBuild\lib\hgi.lib;C:\Projects\USD\USDBuild\lib\usdImaging.lib;C:\Projects\USD\USDBuild\lib\hd.lib;C:\Projects\USD\USDBuild\lib\cameraUtil.lib;C:\Projects\USD\USDBuild\lib\usdVol.lib;C:\Projects\USD\USDBuild\lib\pxOsd.lib;C:\Projects\USD\USDBuild\lib\osdCPU.lib;C:\Projects\USD\USDBuild\lib\osdGPU.lib;C:\Projects\USD\USDBuild\lib\glf.lib;C:\Projects\USD\USDBuild\lib\garch.lib;opengl32.lib;C:\Projects\USD\USDBuild\lib\hio.lib;C:\Projects\USD\USDBuild\lib\hf.lib;C:\Projects\USD\USDBuild\lib\usdHydra.lib;C:\Projects\USD\USDBuild\lib\usdRender.lib;C:\Projects\USD\USDBuild\lib\usdRi.lib;C:\Projects\USD\USDBuild\lib\usdLux.lib;C:\Projects\USD\USDBuild\lib\usdShade.lib;C:\Projects\USD\USDBuild\lib\sdr.lib;C:\Projects\USD\USDBuild\lib\ndr.lib;C:\Projects\USD\USDBuild\lib\usdSkel.lib;C:\Program Files\Autodesk\Maya2022\lib\OpenMayaFX.lib;C:\Program Files\Autodesk\Maya2022\lib\Image.lib;C:\Program Files\Autodesk\Maya2022\lib\cg.lib;C:\Program Files\Autodesk\Maya2022\lib\cgGL.lib;C:\Program Files\Autodesk\Maya2022\lib\clew.lib;C:\Program Files\Autodesk\Maya2022\lib\tbb.lib;C:\Projects\USD\USDBuild\lib\usdUtils.lib;C:\Projects\USD\USDBuild\lib\usdGeom.lib;C:\Projects\USD\USDBuild\lib\usd.lib;C:\Projects\USD\USDBuild\lib\kind.lib;C:\Projects\USD\USDBuild\lib\pcp.lib;C:\Projects\USD\USDBuild\lib\sdf.lib;C:\Projects\USD\USDBuild\lib\ar.lib;C:\Projects\USD\USDBuild\lib\plug.lib;C:\Projects\USD\USDBuild\lib\work.lib;C:\Projects\USD\USDBuild\lib\vt.lib;C:\Projects\USD\USDBuild\lib\gf.lib;C:\Projects\USD\USDBuild\lib\trace.lib;C:\Projects\USD\USDBuild\lib\js.lib;C:\Projects\USD\USDBuild\lib\tf.lib;Shlwapi.lib;C:\Users\vgadd\AppData\Local\Programs\Python\Python37\libs\python37.lib;C:\Projects\USD\USDBuild\lib\arch.lib;Ws2_32.lib;Dbghelp.lib;C:\Projects\USD\USDBuild\lib\boost_python37-vc141-mt-x64-1_70.lib;C:\Projects\USD\USDBuild\lib\tbb.lib;C:\Program Files\Autodesk\Maya2022\lib\OpenMayaAnim.lib;C:\Program Files\Autodesk\Maya2022\lib\OpenMayaUI.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\scripts\ImportExportTranslator.cpp" />
+    <ClCompile Include="..\scripts\plugin.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\scripts\ImportExportTranslator.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
