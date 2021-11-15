@@ -104,6 +104,15 @@ MPxFileTranslator::MFileKind RPRMaterialXMayaTranslator::identifyFile(
     return retValue;
 }
 
+MStatus RPRMaterialXMayaTranslator::reader(
+	const MFileObject&                file,
+	const MString&                    optionsString,
+	MPxFileTranslator::FileAccessMode mode)
+{
+
+	return MStatus::kSuccess;
+}
+
 /* static */
 const std::string& RPRMaterialXMayaTranslator::GetDefaultOptions()
 {

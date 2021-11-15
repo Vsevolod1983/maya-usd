@@ -32,6 +32,12 @@ public:
         const MString&                    optionsString,
         MPxFileTranslator::FileAccessMode mode) override;
 
+	MAYAUSD_PLUGIN_PUBLIC
+		MStatus reader(
+			const MFileObject&                file,
+			const MString&                    optionsString,
+			MPxFileTranslator::FileAccessMode mode) override;
+
     bool haveReadMethod() const override { return true; }
     bool haveWriteMethod() const override { return true; }
 

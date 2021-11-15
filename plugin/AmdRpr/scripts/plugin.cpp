@@ -31,8 +31,10 @@
 
 #include "ImportExportTranslator.h"
 
+#include "MayaMaterialRegisterer.h"
+#include "INodeRegisterer.h"
+
 #include <maya/MFnPlugin.h>
-//#include <maya/MGlobal.h>
 //#include <maya/MPxNode.h>
 #include <maya/MStatus.h>
 #include <maya/MString.h>
@@ -48,25 +50,70 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 //static const MString _RegistrantId("RprUsd");
 
+class NodeRegisterer : public INodeRegisterer
+{
+public:
+	NodeRegisterer(MObject pluginObj) : m_pluginObj(pluginObj) {}
+
+	MStatus registerNode(
+		const MString &typeName,
+		const MTypeId &typeId,
+		CreatorFunction creatorFunction,
+		InitializeFunction initFunction,
+		MPxNode::Type type = MPxNode::kDependNode,
+		const MString *classification = nullptr) override;
+
+	void deregisterNode(MTypeId typeId) override;
+
+private:
+	MObject m_pluginObj;
+};
+
+
+MStatus NodeRegisterer::registerNode(
+	const MString &typeName,
+	const MTypeId &typeId,
+	CreatorFunction creatorFunction,
+	InitializeFunction initFunction,
+	MPxNode::Type type,
+	const MString *classification)
+{
+	MFnPlugin plugin(m_pluginObj);
+
+	return plugin.registerNode(typeName, typeId, creatorFunction, initFunction, type, classification);
+}
+
+void NodeRegisterer::deregisterNode(MTypeId typeId)
+{
+	MFnPlugin plugin(m_pluginObj);
+	plugin.deregisterNode(typeId);
+}
+
 __declspec(dllexport)
-MStatus initializePlugin(MObject obj)
+MStatus initializePlugin(MObject pluginObj)
 {
     MStatus status = MStatus::kSuccess;
 
-    MFnPlugin plugin(obj, "AMD", "0.1", "Any");
+    MFnPlugin plugin(pluginObj, "AMD", "0.1", "Any");
 
 	plugin.registerFileTranslator(MayaUsd::RPRMaterialXMayaTranslator::translatorName, nullptr, MayaUsd::RPRMaterialXMayaTranslator::creator);
+
+	NodeRegisterer nodeRegisterer(pluginObj);
+	MayaMaterialRegisterer::registerNodes(&nodeRegisterer);
 
     return status;
 }
 
 __declspec(dllexport)
-MStatus uninitializePlugin(MObject obj)
+MStatus uninitializePlugin(MObject pluginObj)
 {
     MStatus status = MStatus::kSuccess;
-    MFnPlugin plugin(obj);
+    MFnPlugin plugin(pluginObj);
 
 	plugin.deregisterFileTranslator(MayaUsd::RPRMaterialXMayaTranslator::translatorName);
+
+	NodeRegisterer nodeRegisterer(pluginObj);
+	MayaMaterialRegisterer::deregisterNodes(&nodeRegisterer);
 
     return status;
 }
