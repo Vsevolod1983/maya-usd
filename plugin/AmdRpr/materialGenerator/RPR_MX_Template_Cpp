@@ -1,0 +1,45 @@
+#include "<NodeClassName>.h"
+
+MTypeId <NodeClassName>::m_typeId = 0;
+
+namespace
+{
+	<Attribute_Object_List>
+}
+
+void* <NodeClassName>::creator()
+{
+	return new RPR_MX_NodeName1();
+}
+
+MStatus <NodeClassName>::initialize()
+{
+	<Attribute_Creation_List>
+	return MStatus::kSuccess;
+}
+
+void <NodeClassName>::registerNode(INodeRegisterer* pINodeRegisterer, MTypeId typeId)
+{
+	m_typeId = typeId;
+	MString materialName = "<NodeName>";
+
+	MString shaderClassify("rendernode/RprUsd/MaterialX/shader/surface:shader/surface");
+	//MString UserVolumeClassify("rendernode/RprUsd/shader/volume:shader/volume");
+	MString utilityClassify("rendernode/RprUsd/MaterialX/utility:utility/general");
+	MString textureClassify("rendernode/RprUsd/MaterialX/texture/2d:texture/2d");
+
+
+	//static const MString FireRenderSurfacesDrawDBClassification("drawdb/shader/surface/" + materialName);
+	//static const MString FireRenderSurfacesRegistrantId("RPR_MX_<NODE_NAME>RegistrantId");
+	//static const MString FireRenderSurfacesFullClassification = utilityClassify;// +":" + FireRenderSurfacesDrawDBClassification/* + ":swatch/" + swatchName*/;
+
+	MStatus status = pINodeRegisterer->registerNode(materialName, m_typeId,
+		creator,
+		initialize,
+		MPxNode::kDependNode, &<ClassifyVariableName>);
+}
+
+void <NodeClassName>::deregisterNode(INodeRegisterer* pINodeRegisterer)
+{
+	pINodeRegisterer->deregisterNode(m_typeId);
+}
