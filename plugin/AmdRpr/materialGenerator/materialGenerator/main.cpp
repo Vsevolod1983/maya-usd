@@ -3,10 +3,13 @@
 #include <map>
 #include <iostream>
 #include <fstream>
+#include <assert.h>
 
 #include "MaterialXCore/Document.h"
 #include "MaterialXFormat/File.h"
 #include "MaterialXFormat/Util.h"
+
+#include <sstrean>
 
 const std::string USD_BUILD = "C:\\Projects\\USD\\USDBuild/";
 
@@ -22,11 +25,58 @@ void ReplaceAll(string& inout, const string& findWhat, const string& replaceWith
 
 	size_t pos = 0;
 
-	while ((pos = inout.find(inout, pos)) != std::string::npos) {
-		inout.replace(pos, replaceWith.length(), replaceWith);
-		start_pos += to.length(); // ...
+	while ((pos = inout.find(findWhat, pos)) != std::string::npos)
+	{
+		inout.replace(pos, findWhat.length(), replaceWith);
+		pos += replaceWith.length(); // ...
 	}
 }
+
+string CreateFloatAttribute(mx::InputPtr inputPtr)
+{
+	ostringstream os;
+	string creationString;
+	os << inputPtr->getName() << " = " << nAttr.create" << endl;
+	
+	//inputPtr->getName()
+}
+
+string CreateAppropriateAttribute(const string& type, mx::InputPtr inputPtr)
+{
+
+}
+
+void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attrCreationList, string& classifyVariableName)
+{
+	string name = outputPtr->getName();
+	attrObjectList += "\tMObject " + name + ";\n";
+
+	if (outputPtr->getType() == "surfaceshader")
+	{
+		classifyVariableName = "shaderClassify";
+	}
+	else
+	{
+		classifyVariableName = "utilityClassify";
+	}
+}
+
+void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCreationList)
+{
+	mx::StringVec attrNameList = inputPtr->getAttributeNames();
+
+	const string name = inputPtr->getName();
+
+	attrObjectList += "\tMObject " + name + ";\n";
+
+	const string type = inputPtr->getAttribute("type");
+
+	//for (const string& attr : attrNameList)
+	//{
+	//	const string& str = inputPtr->getAttribute(attr);
+	//}
+}
+
 
 void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, const string& strHTemplate)
 {
@@ -48,19 +98,18 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, con
 
 	const mx::StringVec strVec = nodeDefPtr->getAttributeNames();
 
+	vector<mx::OutputPtr> outputs = nodeDefPtr->getOutputs(); 
+	assert(outputs.size() == 1);
+	ProcessOutput(outputs[0], attrObjectList, attrCreationList, classifyVariableName);
+
 	vector<mx::InputPtr> inputs = nodeDefPtr->getInputs();
 
 	for (const mx::InputPtr inputPtr : inputs)
 	{
-		mx::StringVec attrNameList = inputPtr->getgetAttributeNames();
-
-		for (const string& attr : attrNameList)
-		{
-			const string& str = inputPtr->getAttribute(attr);
-		}
+		ProcessInput(inputPtr, attrObjectList, attrCreationList);
 	}
 
-	std::string fileOutputPath = "../Scripts/MayaMaterialX/" + className;
+	std::string fileOutputPath = "../../Scripts/MayaMaterialX/" + className;
 	// Writing Header File
 	string strOutput = strHTemplate;
 	ReplaceAll(strOutput, NodeClassNamePlaceHolder, className);
@@ -81,7 +130,7 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, con
 	outputCppFile.close();
 }
 
-void ProcessFile(const string& file)
+void ProcessFile(const string& file, const string& strHTemplate, const string& strCppTemplate)
 {
 	cout << "Opening file: " << file << endl;
 
@@ -93,17 +142,11 @@ void ProcessFile(const string& file)
 
 		ifstream templateFile;
 
-		std::ifstream templateHFile("RPR_MX_Template_H");
-		std::ifstream templateCppFile("RPR_MX_Template_Cpp");
-
-		std::string strTemplate((std::istreambuf_iterator<char>(templateFile)),
-			std::istreambuf_iterator<char>());
-
 		vector<mx::NodeDefPtr> nodeDefs = mtlxDocumentPtr->getNodeDefs();
 
 		for (mx::NodeDefPtr nodeDefPtr : nodeDefs)
 		{
-			ProcessNodeDef(nodeDefPtr, strTemplate);
+			ProcessNodeDef(nodeDefPtr, strHTemplate, strCppTemplate);
 		}
 	}
 	catch (const mx::Exception& ex)
@@ -131,9 +174,31 @@ int main()
 		//, std::tuple<std::string, std::string> ( "ALG", libraryPath + "alglib/alglib_defs.mtlx")
 	};
 
+	std::ifstream templateHFile("../RPR_MX_Template_H");
+	std::ifstream templateCppFile("../RPR_MX_Template_Cpp");
+
+	if (!templateHFile.is_open())
+	{
+		std::cout << "Template Header file not found " << endl;
+		return -1;
+	}
+
+	if (!templateCppFile.is_open())
+	{
+		std::cout << "Template Cpp file not found " << endl;
+		return -1;
+	}
+
+	std::string strHTemplate((std::istreambuf_iterator<char>(templateHFile)),
+			std::istreambuf_iterator<char>());
+
+	std::string strCppTemplate((std::istreambuf_iterator<char>(templateCppFile)),
+		std::istreambuf_iterator<char>());
+
+
 	for (const MtlxFileTuple& tup : filesToParse)
 	{
-		ProcessFile(std::get<1>(tup));
+		ProcessFile(std::get<1>(tup), strHTemplate, strCppTemplate);
 	}
 
 	return 0;

@@ -1,20 +1,21 @@
 #include "<NodeClassName>.h"
+#include "common.h"
 
 MTypeId <NodeClassName>::m_typeId = 0;
 
 namespace
 {
-	<Attribute_Object_List>
+<Attribute_Object_List>
 }
 
 void* <NodeClassName>::creator()
 {
-	return new RPR_MX_NodeName1();
+	return new <NodeClassName>();
 }
 
 MStatus <NodeClassName>::initialize()
 {
-	<Attribute_Creation_List>
+<Attribute_Creation_List>
 	return MStatus::kSuccess;
 }
 
