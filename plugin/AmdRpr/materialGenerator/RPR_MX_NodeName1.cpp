@@ -1,5 +1,6 @@
 #include "RPR_MX_NodeName1.h"
 #include <maya/MFnNumericAttribute.h>
+#include "../scripts/MayaMaterialX/common.h"
 
 MTypeId RPR_MX_NodeName1::m_typeId = 0;
 
@@ -14,7 +15,7 @@ MStatus RPR_MX_NodeName1::initialize()
 
 	MStatus status;
 
-	MObject output = nAttr.create("out", "o", MFnNumericData::k3Float, 0.0f, &status);
+	MObject output = nAttr.create("out", "o", MFnNumericData::kFloat, 0.0f, &status);
 
 	CHECK_MSTATUS(nAttr.setKeyable(false));
 	CHECK_MSTATUS(nAttr.setStorable(false));
@@ -22,32 +23,10 @@ MStatus RPR_MX_NodeName1::initialize()
 	CHECK_MSTATUS(nAttr.setWritable(false));
 	addAttribute(output);
 
-	MObject base = nAttr.create("base", "b", MFnNumericData::k3Float, 0.0f, &status);
-	nAttr.setMin(0.0);
-	nAttr.setMax(1.0);
+	CreateFloatArrayAttribute<4>("RPR_MX_NodeName1", "base", "b", 0.5f, 0.0f, 1.0f, output);
 
-	CHECK_MSTATUS(nAttr.setKeyable(true));
-	CHECK_MSTATUS(nAttr.setStorable(true));
-	CHECK_MSTATUS(nAttr.setReadable(false));
-	CHECK_MSTATUS(nAttr.setWritable(true));
-	addAttribute(base);
-
-	attributeAffects(base, output);
-	
-	MObject base2 = nAttr.create("base_refl", "brl", MFnNumericData::k2Float, 0.0f, &status);
-	CHECK_MSTATUS(nAttr.setKeyable(true));
-	CHECK_MSTATUS(nAttr.setStorable(true));
-	CHECK_MSTATUS(nAttr.setReadable(false));
-	CHECK_MSTATUS(nAttr.setWritable(true));
-	addAttribute(base2);
-
-	MObject color = nAttr.createColor("color", "c", &status);
-	CHECK_MSTATUS(nAttr.setKeyable(true));
-	CHECK_MSTATUS(nAttr.setStorable(true));
-	CHECK_MSTATUS(nAttr.setReadable(false));
-	CHECK_MSTATUS(nAttr.setWritable(true));
-	addAttribute(color);
-
+	CreateFloatArrayAttribute<3>("RPR_MX_NodeName1", "input1", "in1", 0.5f, 0.0f, 1.0f, output);
+	CreateFloatArrayAttribute<2>("RPR_MX_NodeName1", "input2", "in2", 0.5f, 0.0f, 1.0f, output);
 
 	return MStatus::kSuccess;
 }

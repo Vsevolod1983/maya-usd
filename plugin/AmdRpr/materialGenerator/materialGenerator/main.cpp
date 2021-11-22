@@ -4,12 +4,13 @@
 #include <iostream>
 #include <fstream>
 #include <assert.h>
+#include <algorithm>
 
 #include "MaterialXCore/Document.h"
 #include "MaterialXFormat/File.h"
 #include "MaterialXFormat/Util.h"
 
-#include <sstrean>
+#include <sstream>
 
 const std::string USD_BUILD = "C:\\Projects\\USD\\USDBuild/";
 
@@ -32,21 +33,66 @@ void ReplaceAll(string& inout, const string& findWhat, const string& replaceWith
 	}
 }
 
-string CreateFloatAttribute(mx::InputPtr inputPtr)
+
+string getShortName(vector<string>& usedShortNames, mx::InputPtr inputPtr)
+{
+	string name = inputPtr->getName();
+
+	int attempt = 0;
+
+	string nameToTry;
+	do
+	{ 
+		// first try just first character
+		if (attempt == 0)
+		{
+			nameToTry = name.substr(0, 1);
+		}
+		else if (attempt == 1)
+		{
+			nameToTry = name.substr(0, 2);
+		}
+		else
+		{
+			nameToTry = name.substr(0, 2) + std::to_string(attempt);
+		}
+		attempt++;
+	} while (std::find(usedShortNames.begin(), usedShortNames.end(), nameToTry) != usedShortNames.end());
+
+	usedShortNames.push_back(nameToTry);
+	return nameToTry;
+}
+
+string CreateFloatAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
 {
 	ostringstream os;
-	string creationString;
-	os << inputPtr->getName() << " = " << nAttr.create" << endl;
+	string shortName = getShortName(usedShortNames, inputPtr);
+	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+
+	os << "\t" << inputPtr->getName() << " = " << "nAttr.create(\"" << inputPtr->getName() <<"\", \"" << shortName << "\",  MFnNumericData::kFloat, " << strDefValue  << ", &status);" << endl;
+	os << "\tnAttr.setMin(\"" << inputPtr->getAttribute("uimin") << "\");" << endl;
+	os << "\tnAttr.setMax(\"" << inputPtr->getAttribute("uimax") << "\");" << endl;
+
+	os << "\tstatus = addAttribute(" << outputs[0]->getName() << ");" << endl;
+	os << "\tstatus = attributeAffects(" << inputPtr->getName() << "," << outputs[0]->getName() << ");\n" << endl;
 	
+	return os.str();
 	//inputPtr->getName()
 }
 
-string CreateAppropriateAttribute(const string& type, mx::InputPtr inputPtr)
+string CreateAppropriateAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
 {
+	const string type = inputPtr->getType();
 
+	if (type == "float")
+	{
+		return CreateFloatAttribute(inputPtr, usedShortNames, outputs);
+	}
+
+	return "";
 }
 
-void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attrCreationList, string& classifyVariableName)
+void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attrCreationList, string& classifyVariableName, vector<string>& usedShortNames)
 {
 	string name = outputPtr->getName();
 	attrObjectList += "\tMObject " + name + ";\n";
@@ -61,7 +107,7 @@ void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attr
 	}
 }
 
-void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCreationList)
+void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCreationList, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
 {
 	mx::StringVec attrNameList = inputPtr->getAttributeNames();
 
@@ -69,7 +115,7 @@ void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCre
 
 	attrObjectList += "\tMObject " + name + ";\n";
 
-	const string type = inputPtr->getAttribute("type");
+	attrCreationList += CreateAppropriateAttribute(inputPtr, usedShortNames, outputs);
 
 	//for (const string& attr : attrNameList)
 	//{
@@ -96,17 +142,21 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, con
 	string attrCreationList;
 	string classifyVariableName;
 
-	const mx::StringVec strVec = nodeDefPtr->getAttributeNames();
-
+	vector<string> usedShortNames;
+	
 	vector<mx::OutputPtr> outputs = nodeDefPtr->getOutputs(); 
-	assert(outputs.size() == 1);
-	ProcessOutput(outputs[0], attrObjectList, attrCreationList, classifyVariableName);
+	if (outputs.size() > 1)
+	{
+		cout << "WARNING: more than 1 output detected: className: " << className << endl;
+	}
+
+	ProcessOutput(outputs[0], attrObjectList, attrCreationList, classifyVariableName, usedShortNames);
 
 	vector<mx::InputPtr> inputs = nodeDefPtr->getInputs();
 
 	for (const mx::InputPtr inputPtr : inputs)
 	{
-		ProcessInput(inputPtr, attrObjectList, attrCreationList);
+		ProcessInput(inputPtr, attrObjectList, attrCreationList, usedShortNames, outputs);
 	}
 
 	std::string fileOutputPath = "../../Scripts/MayaMaterialX/" + className;

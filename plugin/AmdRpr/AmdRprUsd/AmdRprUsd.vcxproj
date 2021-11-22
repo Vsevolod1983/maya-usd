@@ -145,6 +145,7 @@
     <ClInclude Include="..\scripts\ImportExportTranslator.h" />
     <ClInclude Include="..\scripts\INodeRegisterer.h" />
     <ClInclude Include="..\scripts\MayaMaterialRegisterer.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\common.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
