@@ -138,6 +138,8 @@
     <ClCompile Include="..\materialGenerator\RPR_MX_NodeName1.cpp" />
     <ClCompile Include="..\scripts\ImportExportTranslator.cpp" />
     <ClCompile Include="..\scripts\MayaMaterialRegisterer.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\common.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.cpp" />
     <ClCompile Include="..\scripts\plugin.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -146,6 +148,7 @@
     <ClInclude Include="..\scripts\INodeRegisterer.h" />
     <ClInclude Include="..\scripts\MayaMaterialRegisterer.h" />
     <ClInclude Include="..\scripts\MayaMaterialX\common.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

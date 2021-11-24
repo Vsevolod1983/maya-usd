@@ -12,10 +12,27 @@
 
 #include <sstream>
 
+#include <memory>
+#include <string>
+#include <stdexcept>
+
 const std::string USD_BUILD = "C:\\Projects\\USD\\USDBuild/";
 
 using namespace std;
 namespace mx = MaterialX;
+
+
+template<typename ... Args>
+std::string string_format(const std::string& format, Args ... args)
+{
+	int size_s = std::snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
+
+	size_t size = static_cast<size_t>(size_s);
+	auto  buf = std::make_unique<char[]>(size);
+	std::snprintf(buf.get(), size, format.c_str(), args ...);
+
+	return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
+}
 
 void ReplaceAll(string& inout, const string& findWhat, const string& replaceWith)
 {
@@ -63,21 +80,128 @@ string getShortName(vector<string>& usedShortNames, mx::InputPtr inputPtr)
 	return nameToTry;
 }
 
+string getMinMaxTupleStringHelper(mx::InputPtr inputPtr, const string& attrName)
+{
+	if (inputPtr->hasAttribute(attrName))
+	{
+		string val = inputPtr->getAttribute(attrName);
+		return "true, " + val;
+	}
+	else
+	{
+		return "false, 0.0f";
+	}
+}
+
 string CreateFloatAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
 {
-	ostringstream os;
 	string shortName = getShortName(usedShortNames, inputPtr);
 	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
 
-	os << "\t" << inputPtr->getName() << " = " << "nAttr.create(\"" << inputPtr->getName() <<"\", \"" << shortName << "\",  MFnNumericData::kFloat, " << strDefValue  << ", &status);" << endl;
-	os << "\tnAttr.setMin(\"" << inputPtr->getAttribute("uimin") << "\");" << endl;
-	os << "\tnAttr.setMax(\"" << inputPtr->getAttribute("uimax") << "\");" << endl;
+	float min = std::numeric_limits<float>::min();
+	float max = std::numeric_limits<float>::max();
 
-	os << "\tstatus = addAttribute(" << outputs[0]->getName() << ");" << endl;
-	os << "\tstatus = attributeAffects(" << inputPtr->getName() << "," << outputs[0]->getName() << ");\n" << endl;
+	float softmin = min;
+	float softmax = max;
+
+	string name = inputPtr->getName();
+
+	string minmax = string_format("{std::tuple<bool, float> (%s), std::tuple<bool, float> (%s), std::tuple<bool, float> (%s), std::tuple<bool, float> (%s) }",
+		getMinMaxTupleStringHelper(inputPtr, "uimin").c_str(),
+		getMinMaxTupleStringHelper(inputPtr, "uimax").c_str(), 
+		getMinMaxTupleStringHelper(inputPtr, "uiSoftMin").c_str(), 
+		getMinMaxTupleStringHelper(inputPtr, "uiSoftMax").c_str());
+
+	string callStr;
+	callStr = string_format("\t%s = CreateFloatAttribute(\"%s\", \"%s\", %s, %s, %s);\n", 
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		inputPtr->getDefaultValue()->getValueString().c_str(),
+		minmax.c_str(),
+		outputs[0]->getName().c_str());
 	
-	return os.str();
-	//inputPtr->getName()
+	return callStr;
+}
+
+string CreateIntAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedShortNames, inputPtr);
+	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+
+	string name = inputPtr->getName();
+
+	string callStr;
+	callStr = string_format("\t%s = CreateIntAttribute(\"%s\", \"%s\", %s, %s, %s);\n",
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		inputPtr->getDefaultValue()->getValueString().c_str(),
+		inputPtr->getAttribute("uimin").c_str(),
+		inputPtr->getAttribute("uimax").c_str(),
+		outputs[0]->getName().c_str());
+
+	return callStr;
+
+}
+
+string CreateBooleanAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedShortNames, inputPtr);
+	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+
+	string name = inputPtr->getName();
+
+	string callStr;
+	callStr = string_format("\t%s = CreateBooleanAttribute(\"%s\", \"%s\", %s, %s);\n",
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		inputPtr->getDefaultValue()->getValueString().c_str(),
+		outputs[0]->getName().c_str());
+
+	return callStr;
+}
+
+string CreateColor3Attribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedShortNames, inputPtr);
+	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+
+	string name = inputPtr->getName();
+
+	string defaultColorVector = "{" + strDefValue + "}";
+
+	string callStr;
+	callStr = string_format("\t%s = CreateColor3Attribute(\"%s\", \"%s\", %s, %s);\n",
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		defaultColorVector.c_str(),
+		outputs[0]->getName().c_str());
+
+	return callStr;
+}
+
+string CreateFloatArrayAttribute(unsigned int count, mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedShortNames, inputPtr);
+	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+
+	string name = inputPtr->getName();
+
+	string defaultColorVector = "{" + strDefValue + "}";
+
+	string callStr;
+	callStr = string_format("\t%s = CreateFloatArrayAttribute<%d>(\"%s\", \"%s\", %s, %s);\n",
+		name.c_str(),
+		count,
+		name.c_str(),
+		shortName.c_str(),
+		defaultColorVector.c_str(),
+		outputs[0]->getName().c_str());
+
+	return callStr;
 }
 
 string CreateAppropriateAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
@@ -87,6 +211,34 @@ string CreateAppropriateAttribute(mx::InputPtr inputPtr, vector<string>& usedSho
 	if (type == "float")
 	{
 		return CreateFloatAttribute(inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "integer")
+	{
+		return CreateIntAttribute(inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "boolean")
+	{
+		return CreateBooleanAttribute(inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "color3")
+	{
+		return CreateColor3Attribute(inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "vector2")
+	{
+		return CreateFloatArrayAttribute(2, inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "vector3")
+	{
+		return CreateFloatArrayAttribute(3, inputPtr, usedShortNames, outputs);
+	}
+	else if (type == "vector4")
+	{
+		return CreateFloatArrayAttribute(4, inputPtr, usedShortNames, outputs);
+	}
+	else
+	{
+		cout << "Attribute type is not supported: " << type << ". Attribute name: " << inputPtr->getName() << endl;
 	}
 
 	return "";
@@ -116,15 +268,10 @@ void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCre
 	attrObjectList += "\tMObject " + name + ";\n";
 
 	attrCreationList += CreateAppropriateAttribute(inputPtr, usedShortNames, outputs);
-
-	//for (const string& attr : attrNameList)
-	//{
-	//	const string& str = inputPtr->getAttribute(attr);
-	//}
 }
 
 
-void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, const string& strHTemplate)
+void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strHTemplate, const string& strCppTemplate)
 {
 	static const char* NodeClassNamePlaceHolder = "<NodeClassName>";
 	static const char* NodeNamePlaceHolder = "<NodeName>";
@@ -137,6 +284,8 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, con
 	// Just very simple code to make nodeName by omitting "ND_" prefix in node definition
 	const string prefixToOmit = "ND_";
 	const string nodeName = className.substr(prefixToOmit.length(), className.length() - prefixToOmit.length());
+
+	cout << "Processing NodeDef: " << className << endl;
 
 	string attrObjectList;
 	string attrCreationList;
@@ -168,7 +317,7 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strCppTemplate, con
 	outputHFile.close();
 
 	// Writing Cpp file
-	strOutput = strHTemplate;
+	strOutput = strCppTemplate;
 	ReplaceAll(strOutput, NodeClassNamePlaceHolder, className);
 	ReplaceAll(strOutput, NodeNamePlaceHolder, nodeName);
 	ReplaceAll(strOutput, AttributeObjectListPlaceHolder, attrObjectList);

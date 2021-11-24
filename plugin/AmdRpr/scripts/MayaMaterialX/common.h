@@ -1,41 +1,13 @@
 #pragma once
 
+#include <maya/MObject.h>
 #include <maya/MFnCompoundAttribute.h>
-#include <maya/MFnNumericAttribute.h>
+
 #include <string>
 #include <vector>
+#include <tuple>
 
 using namespace std;
-
-void LogAttrCreationError(const string& nodeName, const string& longName, const string& error)
-{
-	cout << "NodeName: " << nodeName << ". Attribute long name: " << longName << ". Error: " << error << endl;
-}
-
-void MAKE_INPUT(MFnAttribute& attr)
-{
-	CHECK_MSTATUS(attr.setKeyable(true));
-	CHECK_MSTATUS(attr.setStorable(true));
-	CHECK_MSTATUS(attr.setReadable(false));
-	CHECK_MSTATUS(attr.setWritable(true));
-}
-
-void MAKE_INPUT_CONST(MFnAttribute& attr)
-{
-	CHECK_MSTATUS(attr.setKeyable(false));
-	CHECK_MSTATUS(attr.setStorable(true));
-	CHECK_MSTATUS(attr.setReadable(false));
-	CHECK_MSTATUS(attr.setWritable(true));
-	CHECK_MSTATUS(attr.setConnectable(false));
-}
-
-void MAKE_OUTPUT(MFnAttribute& attr)
-{
-	CHECK_MSTATUS(attr.setKeyable(false));
-	CHECK_MSTATUS(attr.setStorable(false));
-	CHECK_MSTATUS(attr.setReadable(true));
-	CHECK_MSTATUS(attr.setWritable(false));
-}
 
 enum class ChildAttributeNamingPattern
 {
@@ -44,58 +16,33 @@ enum class ChildAttributeNamingPattern
 	//INDEX_0123
 };
 
+
+// 0 - MIN
+// 1 - MAX
+// 2 - SOFTMIN
+// 3 - SOFTMAX
+// bool - wheather particular limit should be set or not
+// float - value itself to be set if first parameter is true
+typedef vector<tuple<bool, float>> MinMaxData;
+
+void LogAttrCreationError(const string& longName, const string& error);
+void MakeAsInputAndAdd(MFnAttribute& attr, MObject affectingOutput);
 void CreateFloatChildAttributes(
-	unsigned int count, 
-	ChildAttributeNamingPattern childNamingPattern, 
+	unsigned int count,
+	ChildAttributeNamingPattern childNamingPattern,
 	MFnCompoundAttribute& parentAttr,
-	const string& nodeName,
-	float defaultValue, 
-	float minValue, 
-	float maxValue)
-{
-	MFnNumericAttribute nAttr;
+	const vector<float>& defaultValue,
+	float minValue,
+	float maxValue);
 
-	static vector<MString> childPostfixesXYZW = { "x", "y", "z", "w" };
-	static vector<MString> childPostfixesRGBA = { "r", "g", "b", "a" };
-	//static vector<string> childPostfixesIndices = "0", "1", "2", "3";
-
-	MString longName = parentAttr.name();
-	MString shortName = parentAttr.shortName();
-
-	vector<MString>& postfixes = childNamingPattern == ChildAttributeNamingPattern::XYZW ? childPostfixesXYZW : childPostfixesRGBA;
-
-//	vector<MObject> childAttrs;
-	//childAttrs.resize(count);
-
-	MStatus status;
-	for (unsigned int index = 0; index < count; ++index)
-	{
-		MObject childAttrObj = nAttr.create(longName + postfixes[index], shortName + postfixes[index], MFnNumericData::kFloat, defaultValue, &status);
-
-		if (status != MStatus::kSuccess)
-		{
-			LogAttrCreationError(nodeName.c_str(), longName.asChar(), "Child Attribute creation failed, index: " + std::to_string(index));
-		}
-
-		nAttr.setMin(minValue);
-		nAttr.setMax(maxValue);
-
-		MAKE_INPUT(nAttr);
-
-		parentAttr.addChild(childAttrObj);
-	}
-
-	//return childAttrs;
-}
 
 template <unsigned int count>
 MObject CreateFloatArrayAttribute(
-	const string& nodeName, 
-	const string& longName,  
-	const string& shortName, 
-	float defaultValue, 
-	float minValue, 
-	float maxValue, 
+	const string& longName,
+	const string& shortName,
+	const vector<float>& defaultValue,
+	float minValue,
+	float maxValue,
 	MObject affectingOutput)
 {
 	MFnCompoundAttribute cAttr;
@@ -105,20 +52,59 @@ MObject CreateFloatArrayAttribute(
 
 	if (status != MStatus::kSuccess)
 	{
-		LogAttrCreationError(nodeName, longName, "compound attribute could not be created!");
+		LogAttrCreationError(longName, "compound attribute could not be created!");
 	}
 
-	CreateFloatChildAttributes(count, ChildAttributeNamingPattern::XYZW, cAttr, nodeName, defaultValue, minValue, maxValue);
+	CreateFloatChildAttributes(count, ChildAttributeNamingPattern::XYZW, cAttr, defaultValue, minValue, maxValue);
 
-	//cAttr.setArray(true);
-	MAKE_INPUT(cAttr);
-
-	MPxNode::addAttribute(compoundAttr);
-
-	if (!affectingOutput.isNull())
-	{
-		MPxNode::attributeAffects(compoundAttr, affectingOutput);
-	}
+	MakeAsInputAndAdd(cAttr, affectingOutput);
 
 	return compoundAttr;
 }
+
+
+MObject CreateFloatAttribute(
+	const string& longName,
+	const string& shortName,
+	float defaultValue,
+	const MinMaxData& minmaxData,
+	MObject affectingOutput);
+
+MObject CreateIntAttribute(
+	const string& longName,
+	const string& shortName,
+	int defaultValue,
+	int minValue,
+	int maxValue,
+	MObject affectingOutput);
+
+MObject CreateBooleanAttribute(
+	const string& longName,
+	const string& shortName,
+	bool defaultValue,
+	MObject affectingOutput);
+
+MObject CreateColor3Attribute(
+	const string& longName,
+	const string& shortName,
+	const vector<float>& defaultColor,
+	MObject affectingOutput);
+
+MObject CreateStringAttribute(
+	const string& longName,
+	const string& shortName,
+	bool isFilename,
+	MObject affectingOutput);
+
+MObject Create4x4MatrixAttribute(
+	const string& longName,
+	const string& shortName,
+	const MMatrix& defaultMatrix,
+	MObject affectingOutput);
+
+MObject CreateStringEnumAttribute(
+	const string& longName,
+	const string& shortName,
+	const vector<string>& values,
+	string defaultValue,
+	MObject affectingOutput);

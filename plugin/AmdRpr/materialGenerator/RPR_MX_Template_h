@@ -1,5 +1,5 @@
 #include <maya/MPxNode.h>
-#include "../scripts/INodeRegisterer.h"
+#include "../INodeRegisterer.h"
 
 class <NodeClassName> : public MPxNode
 {

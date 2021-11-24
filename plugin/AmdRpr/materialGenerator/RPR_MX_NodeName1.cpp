@@ -23,10 +23,15 @@ MStatus RPR_MX_NodeName1::initialize()
 	CHECK_MSTATUS(nAttr.setWritable(false));
 	addAttribute(output);
 
-	CreateFloatArrayAttribute<4>("RPR_MX_NodeName1", "base", "b", 0.5f, 0.0f, 1.0f, output);
 
-	CreateFloatArrayAttribute<3>("RPR_MX_NodeName1", "input1", "in1", 0.5f, 0.0f, 1.0f, output);
-	CreateFloatArrayAttribute<2>("RPR_MX_NodeName1", "input2", "in2", 0.5f, 0.0f, 1.0f, output);
+//	CreateFloatAttribute("input1", "in1", 0.5f, 0.0f, 1.0f, 0.1f, 0.9f, output);
+//	CreateLongAttribute("input2", "in2", 37, 0, 100, output);
+	CreateBooleanAttribute("input3", "in3", true, output);
+
+	CreateColor3Attribute("color", "c", {0.3f, 0.3f, 0.3f}, output);
+
+	CreateFloatArrayAttribute<3>("color3", "cl3", { 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
+	CreateFloatArrayAttribute<4>("color4", "cl4", { 1.0f, 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
 
 	return MStatus::kSuccess;
 }
