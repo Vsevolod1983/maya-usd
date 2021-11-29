@@ -50,125 +50,273 @@ void ReplaceAll(string& inout, const string& findWhat, const string& replaceWith
 	}
 }
 
-
-string getShortName(vector<string>& usedShortNames, mx::InputPtr inputPtr)
+vector<string> getChildNames(const string& parentLongName, const string& parentShortName, const string& attrType)
 {
-	string name = inputPtr->getName();
+	// copied from common.h to avoid inclusion common.h in this project. Might be chnaged though
+
+	bool xyzPattern = true;
+	int count = 0;
+
+	vector<string> names;
+
+	if (attrType == "vector2")
+	{
+		count = 2;
+	}
+	else if (attrType == "vector3")
+	{
+		count = 3;
+	}
+	else if (attrType == "vector4")
+	{
+		count = 4;
+	}
+	else if (attrType == "color3")
+	{
+		count = 3;
+		xyzPattern = false;
+	}
+	else if (attrType == "color4")
+	{
+		count = 4;
+		xyzPattern = false;
+	}
+
+	if (count == 0)
+	{
+		return names;
+	}
+
+	static vector<string> childPostfixesXYZW = { "x", "y", "z", "w" };
+	static vector<string> childPostfixesRGBA = { "r", "g", "b", "a" };
+
+	string longName = parentLongName;
+	string shortName = parentShortName;
+
+	vector<string>& postfixes = xyzPattern ? childPostfixesXYZW : childPostfixesRGBA;
+
+	for (size_t index = 0; index < count; ++index)
+	{
+		names.push_back(longName + "_" + postfixes[index]);
+		names.push_back(shortName + postfixes[index]);
+	}
+
+	return names;
+}
+
+// true if particular name is found hence we need to continue searching for "free" name
+bool checkNameAndAdd(const string& parentLongName, const string& nameToTry, set<string>& usedNames, const mx::PortElementPtr elementPtr)
+{
+	vector<string> namesToCheck = getChildNames(parentLongName, nameToTry, elementPtr->getType());
+
+	namesToCheck.push_back(nameToTry);
+
+	bool found = false;
+
+	for (const string& name : namesToCheck)
+	{
+		if (usedNames.find(name) != usedNames.end())
+		{
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+	{
+		usedNames.insert(namesToCheck.begin(), namesToCheck.end());
+		usedNames.insert(nameToTry);
+	}
+
+	return found;
+}
+
+string getShortName(set<string>& usedNames, const mx::PortElementPtr elementPtr)
+{
+	string parentLongName = elementPtr->getName();
 
 	int attempt = 0;
 
+	usedNames.insert(parentLongName);
+
 	string nameToTry;
+	vector<string> childNames;
 	do
 	{ 
 		// first try just first character
 		if (attempt == 0)
 		{
-			nameToTry = name.substr(0, 1);
+			nameToTry = parentLongName.substr(0, 1);
 		}
 		else if (attempt == 1)
 		{
-			nameToTry = name.substr(0, 2);
+			nameToTry = parentLongName.substr(0, 2);
 		}
 		else
 		{
-			nameToTry = name.substr(0, 2) + std::to_string(attempt);
+			nameToTry = parentLongName.substr(0, 2) + std::to_string(attempt);
 		}
 		attempt++;
-	} while (std::find(usedShortNames.begin(), usedShortNames.end(), nameToTry) != usedShortNames.end());
+	
+	} while (checkNameAndAdd(parentLongName, nameToTry, usedNames, elementPtr));
 
-	usedShortNames.push_back(nameToTry);
 	return nameToTry;
 }
 
-string getMinMaxTupleStringHelper(mx::InputPtr inputPtr, const string& attrName)
+string getMinMaxTupleStringHelper(mx::PortElementPtr elementPtr, const string& attrName)
 {
-	if (inputPtr->hasAttribute(attrName))
+	if (elementPtr->hasAttribute(attrName))
 	{
-		string val = inputPtr->getAttribute(attrName);
+		string val = elementPtr->getAttribute(attrName);
 		return "true, " + val;
 	}
 	else
 	{
-		return "false, 0.0f";
+		return "false, 0";
 	}
 }
 
-string CreateFloatAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+template <typename T = float>
+string getMinMaxTupleBundleStringHelper(mx::PortElementPtr elementPtr)
 {
-	string shortName = getShortName(usedShortNames, inputPtr);
-	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+	string typeString = typeid(T) == typeid(float) ? "float" : "int";
 
-	float min = std::numeric_limits<float>::min();
-	float max = std::numeric_limits<float>::max();
+	return string_format("{std::tuple<bool, %s> (%s), std::tuple<bool, %s> (%s), std::tuple<bool, %s> (%s), std::tuple<bool, %s> (%s) }",
+		typeString.c_str(),
+		getMinMaxTupleStringHelper(elementPtr, "uimin").c_str(),
+		typeString.c_str(),
+		getMinMaxTupleStringHelper(elementPtr, "uimax").c_str(),
+		typeString.c_str(),
+		getMinMaxTupleStringHelper(elementPtr, "uiSoftMin").c_str(),
+		typeString.c_str(),
+		getMinMaxTupleStringHelper(elementPtr, "uiSoftMax").c_str());
+}
 
-	float softmin = min;
-	float softmax = max;
+string getOutputVectorString(const vector<mx::OutputPtr>& outputs)
+{
+	string retVal = "{";
 
-	string name = inputPtr->getName();
+	for (size_t i = 0; i < outputs.size(); ++i)
+	{
+		retVal += outputs[i]->getName();
 
-	string minmax = string_format("{std::tuple<bool, float> (%s), std::tuple<bool, float> (%s), std::tuple<bool, float> (%s), std::tuple<bool, float> (%s) }",
-		getMinMaxTupleStringHelper(inputPtr, "uimin").c_str(),
-		getMinMaxTupleStringHelper(inputPtr, "uimax").c_str(), 
-		getMinMaxTupleStringHelper(inputPtr, "uiSoftMin").c_str(), 
-		getMinMaxTupleStringHelper(inputPtr, "uiSoftMax").c_str());
+		if (i < outputs.size() - 1)
+		{
+			retVal += ", ";
+		}
+	}
+
+	retVal += "}";
+	return retVal;
+}
+
+string CreateFloatAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedNames, elementPtr);
+	string strDefValue;
+
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}
+	else
+	{
+		strDefValue = "0.0";
+	}
+
+	string name = elementPtr->getName();
+
+	string minmax = getMinMaxTupleBundleStringHelper(elementPtr);
 
 	string callStr;
 	callStr = string_format("\t%s = CreateFloatAttribute(\"%s\", \"%s\", %s, %s, %s);\n", 
 		name.c_str(),
 		name.c_str(),
 		shortName.c_str(),
-		inputPtr->getDefaultValue()->getValueString().c_str(),
+		strDefValue.c_str(),
 		minmax.c_str(),
-		outputs[0]->getName().c_str());
+		getOutputVectorString(outputs).c_str());
 	
 	return callStr;
 }
 
-string CreateIntAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+string CreateIntAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
 {
-	string shortName = getShortName(usedShortNames, inputPtr);
-	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+	string shortName = getShortName(usedNames, elementPtr);
 
-	string name = inputPtr->getName();
+	string strDefValue;
+
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}
+	else
+	{
+		strDefValue = "0";
+	}
+
+	string name = elementPtr->getName();
 
 	string callStr;
 	callStr = string_format("\t%s = CreateIntAttribute(\"%s\", \"%s\", %s, %s, %s);\n",
 		name.c_str(),
 		name.c_str(),
 		shortName.c_str(),
-		inputPtr->getDefaultValue()->getValueString().c_str(),
-		inputPtr->getAttribute("uimin").c_str(),
-		inputPtr->getAttribute("uimax").c_str(),
-		outputs[0]->getName().c_str());
+		strDefValue.c_str(),
+		getMinMaxTupleBundleStringHelper<int>(elementPtr).c_str(),
+		getOutputVectorString(outputs).c_str());
 
 	return callStr;
 
 }
 
-string CreateBooleanAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+string CreateBooleanAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
 {
-	string shortName = getShortName(usedShortNames, inputPtr);
-	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+	string shortName = getShortName(usedNames, elementPtr);
 
-	string name = inputPtr->getName();
+	string strDefValue;
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}
+	else
+	{
+		strDefValue = "false";
+	}
+
+	string name = elementPtr->getName();
 
 	string callStr;
 	callStr = string_format("\t%s = CreateBooleanAttribute(\"%s\", \"%s\", %s, %s);\n",
 		name.c_str(),
 		name.c_str(),
 		shortName.c_str(),
-		inputPtr->getDefaultValue()->getValueString().c_str(),
-		outputs[0]->getName().c_str());
+		strDefValue.c_str(),
+		getOutputVectorString(outputs).c_str());
 
 	return callStr;
 }
 
-string CreateColor3Attribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+string CreateColor3Attribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
 {
-	string shortName = getShortName(usedShortNames, inputPtr);
-	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+	string shortName = getShortName(usedNames, elementPtr);
 
-	string name = inputPtr->getName();
+	string strDefValue;
+
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}
+	else
+	{
+		strDefValue = "0.0, 0.0, 0.0";
+	}
+
+	string name = elementPtr->getName();
 
 	string defaultColorVector = "{" + strDefValue + "}";
 
@@ -178,78 +326,198 @@ string CreateColor3Attribute(mx::InputPtr inputPtr, vector<string>& usedShortNam
 		name.c_str(),
 		shortName.c_str(),
 		defaultColorVector.c_str(),
-		outputs[0]->getName().c_str());
+		getOutputVectorString(outputs).c_str());
 
 	return callStr;
 }
 
-string CreateFloatArrayAttribute(unsigned int count, mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+string CreateFloatArrayAttribute(unsigned int count, mx::PortElementPtr elementPtr, bool xyzNamingPattern, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
 {
-	string shortName = getShortName(usedShortNames, inputPtr);
-	const string strDefValue = inputPtr->getDefaultValue()->getValueString();
+	string shortName = getShortName(usedNames, elementPtr);
+	string strDefValue;
+	
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}
+	else
+	{
+		for (unsigned int i = 0; i < count; i++)
+		{
+			strDefValue += "0.0f";
+			if (i < count - 1)
+			{
+				strDefValue += ", ";
+			}
+		}
+	}
 
-	string name = inputPtr->getName();
+	strDefValue = "{" + strDefValue + "}";
 
-	string defaultColorVector = "{" + strDefValue + "}";
+	string name = elementPtr->getName();
+	string childNamingPattern = string("ChildAttributeNamingPattern::") + (xyzNamingPattern ? "XYZW" : "RGBA");
 
 	string callStr;
-	callStr = string_format("\t%s = CreateFloatArrayAttribute<%d>(\"%s\", \"%s\", %s, %s);\n",
+	callStr = string_format("\t%s = CreateFloatArrayAttribute<%d>(\"%s\", \"%s\", %s, %s, %s, %s);\n",
 		name.c_str(),
 		count,
 		name.c_str(),
 		shortName.c_str(),
-		defaultColorVector.c_str(),
-		outputs[0]->getName().c_str());
+		strDefValue.c_str(),
+		getMinMaxTupleBundleStringHelper(elementPtr).c_str(),
+		childNamingPattern.c_str(),
+		getOutputVectorString(outputs).c_str());
 
 	return callStr;
 }
 
-string CreateAppropriateAttribute(mx::InputPtr inputPtr, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+string CreateStringAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, bool isFileName, const vector<mx::OutputPtr>& outputs)
 {
-	const string type = inputPtr->getType();
+	string shortName = getShortName(usedNames, elementPtr);
+
+	/*string strDefValue;
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = defValue->getValueString();
+	}*/
+
+	string name = elementPtr->getName();
+	string isFileNameStr = isFileName ? "true" : "false";
+
+	string callStr;
+	callStr = string_format("\t%s = CreateStringAttribute(\"%s\", \"%s\", %s, %s);\n",
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		isFileNameStr.c_str(),
+		getOutputVectorString(outputs).c_str());
+
+	return callStr;
+}
+
+string getQuotedValuesFromEnum(mx::PortElementPtr elementPtr)
+{
+	string rawEnum = elementPtr->getAttribute("enum");
+	string retVal;
+
+	size_t pos = 0;
+	size_t commaIndex = 0;
+
+	do 
+	{
+		commaIndex = rawEnum.find(",", pos);
+		size_t endWordIndex = commaIndex;
+
+		if (commaIndex == string::npos)
+		{
+			endWordIndex = rawEnum.length();
+		}
+
+		retVal += "\"" + rawEnum.substr(pos, endWordIndex - pos ) + "\"";
+
+		if (commaIndex != string::npos)
+		{
+			retVal += ",";
+			pos = commaIndex + 1;
+		}
+	} while (commaIndex != string::npos);
+
+	return retVal;
+}
+
+string CreateStringEnumAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
+{
+	string shortName = getShortName(usedNames, elementPtr);
+
+	string strDefValue;
+	mx::ValuePtr defValue = elementPtr->getDefaultValue();
+	if (defValue)
+	{
+		strDefValue = "\"" + defValue->getValueString() + "\"";
+	}
+
+	string values = "{" + getQuotedValuesFromEnum(elementPtr) + "}";
+	
+
+	string name = elementPtr->getName();
+
+	string callStr;
+	callStr = string_format("\t%s = CreateStringEnumAttribute(\"%s\", \"%s\", %s, %s, %s);\n",
+		name.c_str(),
+		name.c_str(),
+		shortName.c_str(),
+		values.c_str(),
+		strDefValue.c_str(),
+		getOutputVectorString(outputs).c_str());
+
+	return callStr;
+}
+
+
+string CreateAppropriateAttribute(mx::PortElementPtr elementPtr, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
+{
+	const string type = elementPtr->getType();
 
 	if (type == "float")
 	{
-		return CreateFloatAttribute(inputPtr, usedShortNames, outputs);
+		return CreateFloatAttribute(elementPtr, usedNames, outputs);
 	}
 	else if (type == "integer")
 	{
-		return CreateIntAttribute(inputPtr, usedShortNames, outputs);
+		return CreateIntAttribute(elementPtr, usedNames, outputs);
 	}
 	else if (type == "boolean")
 	{
-		return CreateBooleanAttribute(inputPtr, usedShortNames, outputs);
+		return CreateBooleanAttribute(elementPtr, usedNames, outputs);
 	}
-	else if (type == "color3")
+	else if (type == "color3" || type == "surfaceshader")
 	{
-		return CreateColor3Attribute(inputPtr, usedShortNames, outputs);
+		return CreateColor3Attribute(elementPtr, usedNames, outputs);
+	}
+	else if (type == "color4")
+	{
+		return CreateFloatArrayAttribute(4, elementPtr, false, usedNames, outputs);
 	}
 	else if (type == "vector2")
 	{
-		return CreateFloatArrayAttribute(2, inputPtr, usedShortNames, outputs);
+		return CreateFloatArrayAttribute(2, elementPtr, true, usedNames, outputs);
 	}
 	else if (type == "vector3")
 	{
-		return CreateFloatArrayAttribute(3, inputPtr, usedShortNames, outputs);
+		return CreateFloatArrayAttribute(3, elementPtr, true, usedNames, outputs);
 	}
 	else if (type == "vector4")
 	{
-		return CreateFloatArrayAttribute(4, inputPtr, usedShortNames, outputs);
+		return CreateFloatArrayAttribute(4, elementPtr, true, usedNames, outputs);
+	}
+	else if (type == "string")
+	{
+		if (elementPtr->hasAttribute("enum"))
+		{
+			return CreateStringEnumAttribute(elementPtr, usedNames, outputs);
+		}
+		else
+		{
+			return CreateStringAttribute(elementPtr, usedNames, false, outputs);
+		}
+	}
+	else if (type == "filename")
+	{
+		return CreateStringAttribute(elementPtr, usedNames, true, outputs);
 	}
 	else
 	{
-		cout << "Attribute type is not supported: " << type << ". Attribute name: " << inputPtr->getName() << endl;
+		cout << "Attribute type is not supported: " << type << ". Attribute name: " << elementPtr->getName() << endl;
 	}
 
 	return "";
 }
 
-void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attrCreationList, string& classifyVariableName, vector<string>& usedShortNames)
+void ProcessOutputs(const vector<mx::OutputPtr>& outputs, string& attrObjectList, string& attrCreationList, string& classifyVariableName, set<string>& usedNames)
 {
-	string name = outputPtr->getName();
-	attrObjectList += "\tMObject " + name + ";\n";
-
-	if (outputPtr->getType() == "surfaceshader")
+	if (outputs[0]->getType() == "surfaceshader")
 	{
 		classifyVariableName = "shaderClassify";
 	}
@@ -257,9 +525,17 @@ void ProcessOutput(mx::OutputPtr outputPtr, string& attrObjectList, string& attr
 	{
 		classifyVariableName = "utilityClassify";
 	}
+
+	for (const mx::OutputPtr outputPtr : outputs)
+	{
+		string name = outputPtr->getName();
+		attrObjectList += "\tMObject " + name + ";\n";
+
+		attrCreationList += CreateAppropriateAttribute(outputPtr, usedNames, {});
+	}
 }
 
-void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCreationList, vector<string>& usedShortNames, const vector<mx::OutputPtr>& outputs)
+void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCreationList, set<string>& usedNames, const vector<mx::OutputPtr>& outputs)
 {
 	mx::StringVec attrNameList = inputPtr->getAttributeNames();
 
@@ -267,7 +543,7 @@ void ProcessInput(mx::InputPtr inputPtr, string& attrObjectList, string& attrCre
 
 	attrObjectList += "\tMObject " + name + ";\n";
 
-	attrCreationList += CreateAppropriateAttribute(inputPtr, usedShortNames, outputs);
+	attrCreationList += CreateAppropriateAttribute(inputPtr, usedNames, outputs);
 }
 
 
@@ -291,21 +567,26 @@ void ProcessNodeDef(mx::NodeDefPtr nodeDefPtr, const string& strHTemplate, const
 	string attrCreationList;
 	string classifyVariableName;
 
-	vector<string> usedShortNames;
+	set<string> usedNames;
 	
 	vector<mx::OutputPtr> outputs = nodeDefPtr->getOutputs(); 
-	if (outputs.size() > 1)
+
+	if (outputs.size() > 0)
 	{
-		cout << "WARNING: more than 1 output detected: className: " << className << endl;
+		ProcessOutputs(outputs, attrObjectList, attrCreationList, classifyVariableName, usedNames);
+	}
+	else
+	{
+		cout << "WARNING: no output detected: " << className << endl;
 	}
 
-	ProcessOutput(outputs[0], attrObjectList, attrCreationList, classifyVariableName, usedShortNames);
+	//ProcessOutputs(outputs, attrObjectList, attrCreationList, classifyVariableName, usedNames);
 
 	vector<mx::InputPtr> inputs = nodeDefPtr->getInputs();
 
 	for (const mx::InputPtr inputPtr : inputs)
 	{
-		ProcessInput(inputPtr, attrObjectList, attrCreationList, usedShortNames, outputs);
+		ProcessInput(inputPtr, attrObjectList, attrCreationList, usedNames, outputs);
 	}
 
 	std::string fileOutputPath = "../../Scripts/MayaMaterialX/" + className;
@@ -367,7 +648,7 @@ int main()
 	std::vector<MtlxFileTuple> filesToParse =
 	{ 
 		std::tuple<std::string, std::string> ( "PBR", libraryPath + "bxdf/standard_surface.mtlx" )
-		//, std::tuple<std::string, std::string> ( "USD", libraryPath + "bxdf/usd_preview_surface.mtlx")
+		, std::tuple<std::string, std::string> ( "USD", libraryPath + "bxdf/usd_preview_surface.mtlx")
 		//, std::tuple<std::string, std::string> ( "STD", libraryPath + "stdlib/stdlib_defs.mtlx")
 		//, std::tuple<std::string, std::string> ( "PBR", libraryPath + "pbrlib/pbrlib_defs.mtlx")
 		//, std::tuple<std::string, std::string> ( "ALG", libraryPath + "alglib/alglib_defs.mtlx")

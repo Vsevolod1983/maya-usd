@@ -31,6 +31,36 @@
     <ClCompile Include="..\scripts\MayaMaterialX\common.cpp">
       <Filter>Scripts\MayaMaterialX</Filter>
     </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPreviewSurface_surfaceshader.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_boolean.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_float.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_integer.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_string.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector2.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector3.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector4.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdTransform2d.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdUVTexture.cpp">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\scripts\ImportExportTranslator.h">
@@ -49,6 +79,36 @@
       <Filter>Scripts\MayaMaterialX</Filter>
     </ClInclude>
     <ClInclude Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPreviewSurface_surfaceshader.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_boolean.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_float.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_integer.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_string.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector2.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector3.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector4.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdTransform2d.h">
+      <Filter>Scripts\MayaMaterialX</Filter>
+    </ClInclude>
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdUVTexture.h">
       <Filter>Scripts\MayaMaterialX</Filter>
     </ClInclude>
   </ItemGroup>

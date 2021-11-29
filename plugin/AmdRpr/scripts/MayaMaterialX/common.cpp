@@ -40,13 +40,36 @@ void MAKE_OUTPUT(MFnAttribute& attr)
 	CHECK_MSTATUS(attr.setWritable(false));
 }
 
+template <typename T = float>
+void setupMinMax(MFnNumericAttribute& nAttr, const MinMaxData<T>& minmaxData)
+{
+	if (std::get<bool>(minmaxData[0]))
+	{
+		nAttr.setMin(std::get<T>(minmaxData[0]));
+	}
+
+	if (std::get<bool>(minmaxData[1]))
+	{
+		nAttr.setMax(std::get<T>(minmaxData[1]));
+	}
+
+	if (std::get<bool>(minmaxData[2]))
+	{
+		nAttr.setSoftMin(std::get<T>(minmaxData[2]));
+	}
+
+	if (std::get<bool>(minmaxData[3]))
+	{
+		nAttr.setSoftMax(std::get<T>(minmaxData[3]));
+	}
+}
+
 void CreateFloatChildAttributes(
 	unsigned int count,
 	ChildAttributeNamingPattern childNamingPattern,
 	MFnCompoundAttribute& parentAttr,
 	const vector<float>& defaultValue,
-	float minValue,
-	float maxValue)
+	const MinMaxData<float>& minmaxData)
 {
 	MFnNumericAttribute nAttr;
 
@@ -59,39 +82,41 @@ void CreateFloatChildAttributes(
 
 	vector<MString>& postfixes = childNamingPattern == ChildAttributeNamingPattern::XYZW ? childPostfixesXYZW : childPostfixesRGBA;
 
-	//	vector<MObject> childAttrs;
-		//childAttrs.resize(count);
-
 	MStatus status;
 	for (unsigned int index = 0; index < count; ++index)
 	{
-		MObject childAttrObj = nAttr.create(longName + postfixes[index], shortName + postfixes[index], MFnNumericData::kFloat, defaultValue[index], &status);
+		MObject childAttrObj = nAttr.create(longName + "_" + postfixes[index], shortName + postfixes[index], MFnNumericData::kFloat, defaultValue[index], &status);
 
 		if (status != MStatus::kSuccess)
 		{
 			LogAttrCreationError(longName.asChar(), "Child Attribute creation failed, index: " + std::to_string(index));
 		}
 
-		nAttr.setMin(minValue);
-		nAttr.setMax(maxValue);
+		setupMinMax(nAttr, minmaxData);
 
 		MAKE_INPUT(nAttr);
 
 		parentAttr.addChild(childAttrObj);
 	}
-
-	//return childAttrs;
 }
 
-void MakeAsInputAndAdd(MFnAttribute& attr, MObject affectingOutput)
+void MakeAsInputOrOutputAndAdd(MFnAttribute& attr, const vector<MObject>& affectingOutput)
 {
-	MAKE_INPUT(attr);
+	if (affectingOutput.size() > 0)
+	{
+		MAKE_INPUT(attr);
+	}
+	else
+	{
+		MAKE_OUTPUT(attr);
+	}
 
 	MPxNode::addAttribute(attr.object());
 
-	if (!affectingOutput.isNull())
+	// Mark that this input affects all outputs
+	for (MObject obj : affectingOutput)
 	{
-		MPxNode::attributeAffects(attr.object(), affectingOutput);
+		MPxNode::attributeAffects(attr.object(), obj);
 	}
 }
 
@@ -100,8 +125,8 @@ MObject CreateFloatAttribute(
 	const string& longName,
 	const string& shortName,
 	float defaultValue,
-	const MinMaxData& minmaxData,
-	MObject affectingOutput)
+	const MinMaxData<float>& minmaxData,
+	const vector<MObject>& affectingOutput)
 {
 	MFnNumericAttribute nAttr;
 
@@ -114,27 +139,9 @@ MObject CreateFloatAttribute(
 		LogAttrCreationError(longName.c_str(), "Attribute creation failed");
 	}
 
-	if (std::get<bool>(minmaxData[0]))
-	{
-		nAttr.setMin(std::get<float>(minmaxData[0]));
-	}
+	setupMinMax(nAttr, minmaxData);
 
-	if (std::get<bool>(minmaxData[1]))
-	{
-		nAttr.setMax(std::get<float>(minmaxData[1]));
-	}
-
-	if (std::get<bool>(minmaxData[2]))
-	{
-		nAttr.setSoftMin(std::get<float>(minmaxData[2]));
-	}
-
-	if (std::get<bool>(minmaxData[3]))
-	{
-		nAttr.setSoftMax(std::get<float>(minmaxData[3]));
-	}
-
-	MakeAsInputAndAdd(nAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(nAttr, affectingOutput);
 
 	return obj;
 }
@@ -143,9 +150,8 @@ MObject CreateIntAttribute(
 	const string& longName,
 	const string& shortName,
 	int defaultValue,
-	int minValue,
-	int maxValue,
-	MObject affectingOutput)
+	const MinMaxData<int>& minmaxData,
+	const vector<MObject>& affectingOutput)
 {
 	MFnNumericAttribute nAttr;
 
@@ -158,10 +164,9 @@ MObject CreateIntAttribute(
 		LogAttrCreationError(longName.c_str(), "Attribute creation failed");
 	}
 
-	nAttr.setMin(minValue);
-	nAttr.setMax(maxValue);
+	setupMinMax<int>(nAttr, minmaxData);
 
-	MakeAsInputAndAdd(nAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(nAttr, affectingOutput);
 
 	return obj;
 }
@@ -171,7 +176,7 @@ MObject CreateBooleanAttribute(
 	const string& longName,
 	const string& shortName,
 	bool defaultValue,
-	MObject affectingOutput)
+	const vector<MObject>& affectingOutput)
 {
 	MFnNumericAttribute nAttr;
 
@@ -184,7 +189,7 @@ MObject CreateBooleanAttribute(
 		LogAttrCreationError(longName.c_str(), "Attribute creation failed");
 	}
 
-	MakeAsInputAndAdd(nAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(nAttr, affectingOutput);
 
 	return obj;
 }
@@ -193,7 +198,7 @@ MObject CreateColor3Attribute(
 	const string& longName,
 	const string& shortName,
 	const vector<float>& defaultColor,
-	MObject affectingOutput)
+	const vector<MObject>& affectingOutput)
 {
 	MFnNumericAttribute nAttr;
 
@@ -208,7 +213,7 @@ MObject CreateColor3Attribute(
 		LogAttrCreationError(longName.c_str(), "Attribute creation failed");
 	}
 
-	MakeAsInputAndAdd(nAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(nAttr, affectingOutput);
 
 	return obj;
 }
@@ -217,7 +222,7 @@ MObject CreateStringAttribute(
 	const string& longName,
 	const string& shortName,
 	bool isFilename,
-	MObject affectingOutput)
+	const vector<MObject>& affectingOutput)
 {
 	//MFnNumericAttribute nAttr;
 	MFnTypedAttribute tAttr;
@@ -236,7 +241,7 @@ MObject CreateStringAttribute(
 		tAttr.setUsedAsFilename(true);
 	}
 
-	MakeAsInputAndAdd(tAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(tAttr, affectingOutput);
 
 	return obj;
 }
@@ -245,7 +250,7 @@ MObject Create4x4MatrixAttribute(
 	const string& longName,
 	const string& shortName,
 	const MMatrix& defaultMatrix,
-	MObject affectingOutput)
+	const vector<MObject>& affectingOutput)
 {
 	MFnMatrixAttribute mAttr;
 
@@ -260,7 +265,7 @@ MObject Create4x4MatrixAttribute(
 
 	mAttr.setDefault(defaultMatrix);
 
-	MakeAsInputAndAdd(mAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(mAttr, affectingOutput);
 
 	return obj;
 }
@@ -270,7 +275,7 @@ MObject CreateStringEnumAttribute(
 	const string& shortName,
 	const vector<string>& values,
 	string defaultValue,
-	MObject affectingOutput)
+	const vector<MObject>& affectingOutput)
 {
 	MFnEnumAttribute eAttr;
 
@@ -290,7 +295,7 @@ MObject CreateStringEnumAttribute(
 
 	eAttr.setDefault(defaultValue.c_str());
 
-	MakeAsInputAndAdd(eAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(eAttr, affectingOutput);
 
 	return obj;
 }

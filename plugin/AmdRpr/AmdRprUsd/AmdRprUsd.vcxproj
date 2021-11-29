@@ -139,7 +139,20 @@
     <ClCompile Include="..\scripts\ImportExportTranslator.cpp" />
     <ClCompile Include="..\scripts\MayaMaterialRegisterer.cpp" />
     <ClCompile Include="..\scripts\MayaMaterialX\common.cpp" />
-    <ClCompile Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPreviewSurface_surfaceshader.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_boolean.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_float.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_integer.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_string.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector2.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector3.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector4.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdTransform2d.cpp" />
+    <ClCompile Include="..\scripts\MayaMaterialX\ND_UsdUVTexture.cpp" />
     <ClCompile Include="..\scripts\plugin.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -149,6 +162,16 @@
     <ClInclude Include="..\scripts\MayaMaterialRegisterer.h" />
     <ClInclude Include="..\scripts\MayaMaterialX\common.h" />
     <ClInclude Include="..\scripts\MayaMaterialX\ND_standard_surface_surfaceshader.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPreviewSurface_surfaceshader.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_boolean.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_float.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_integer.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_string.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector2.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector3.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdPrimvarReader_vector4.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdTransform2d.h" />
+    <ClInclude Include="..\scripts\MayaMaterialX\ND_UsdUVTexture.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

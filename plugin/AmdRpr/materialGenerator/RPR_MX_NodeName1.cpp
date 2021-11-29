@@ -26,12 +26,27 @@ MStatus RPR_MX_NodeName1::initialize()
 
 //	CreateFloatAttribute("input1", "in1", 0.5f, 0.0f, 1.0f, 0.1f, 0.9f, output);
 //	CreateLongAttribute("input2", "in2", 37, 0, 100, output);
-	CreateBooleanAttribute("input3", "in3", true, output);
+//	CreateBooleanAttribute("input3", "in3", true, output);
 
-	CreateColor3Attribute("color", "c", {0.3f, 0.3f, 0.3f}, output);
+//	CreateColor3Attribute("color", "c", {0.3f, 0.3f, 0.3f}, output);
 
-	CreateFloatArrayAttribute<3>("color3", "cl3", { 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
-	CreateFloatArrayAttribute<4>("color4", "cl4", { 1.0f, 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
+
+	MObject obj = nAttr.create("asdd", "ff", MFnNumericData::kInt, 4);
+
+	nAttr.setMin(2);
+	nAttr.setMax(22);
+
+	nAttr.setSoftMin(4);
+	nAttr.setSoftMax(20);
+
+	CHECK_MSTATUS(nAttr.setKeyable(true));
+	CHECK_MSTATUS(nAttr.setStorable(true));
+	CHECK_MSTATUS(nAttr.setReadable(false));
+	CHECK_MSTATUS(nAttr.setWritable(true));
+	addAttribute(obj);
+
+	//CreateFloatArrayAttribute<3>("color3", "cl3", { 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
+	//CreateFloatArrayAttribute<4>("color4", "cl4", { 1.0f, 1.0f, 1.0f, 1.0f }, 0.0f, 1.0f, output);
 
 	return MStatus::kSuccess;
 }

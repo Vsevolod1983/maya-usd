@@ -23,17 +23,19 @@ enum class ChildAttributeNamingPattern
 // 3 - SOFTMAX
 // bool - wheather particular limit should be set or not
 // float - value itself to be set if first parameter is true
-typedef vector<tuple<bool, float>> MinMaxData;
+//typedef 
+template <typename T>
+using MinMaxData = vector<tuple<bool, T>>;
 
 void LogAttrCreationError(const string& longName, const string& error);
-void MakeAsInputAndAdd(MFnAttribute& attr, MObject affectingOutput);
+void MakeAsInputOrOutputAndAdd(MFnAttribute& attr, const vector<MObject>& affectingOutput);
+
 void CreateFloatChildAttributes(
 	unsigned int count,
 	ChildAttributeNamingPattern childNamingPattern,
 	MFnCompoundAttribute& parentAttr,
 	const vector<float>& defaultValue,
-	float minValue,
-	float maxValue);
+	const MinMaxData<float>& minmaxData);
 
 
 template <unsigned int count>
@@ -41,9 +43,9 @@ MObject CreateFloatArrayAttribute(
 	const string& longName,
 	const string& shortName,
 	const vector<float>& defaultValue,
-	float minValue,
-	float maxValue,
-	MObject affectingOutput)
+	const MinMaxData<float>& minmaxData,
+	ChildAttributeNamingPattern childNamingPattern,
+	const vector<MObject> & affectingOutput)
 {
 	MFnCompoundAttribute cAttr;
 
@@ -55,56 +57,54 @@ MObject CreateFloatArrayAttribute(
 		LogAttrCreationError(longName, "compound attribute could not be created!");
 	}
 
-	CreateFloatChildAttributes(count, ChildAttributeNamingPattern::XYZW, cAttr, defaultValue, minValue, maxValue);
+	CreateFloatChildAttributes(count, childNamingPattern, cAttr, defaultValue, minmaxData);
 
-	MakeAsInputAndAdd(cAttr, affectingOutput);
+	MakeAsInputOrOutputAndAdd(cAttr, affectingOutput);
 
 	return compoundAttr;
 }
-
 
 MObject CreateFloatAttribute(
 	const string& longName,
 	const string& shortName,
 	float defaultValue,
-	const MinMaxData& minmaxData,
-	MObject affectingOutput);
+	const MinMaxData<float>& minmaxData,
+	const vector<MObject> & affectingOutput);
 
 MObject CreateIntAttribute(
 	const string& longName,
 	const string& shortName,
 	int defaultValue,
-	int minValue,
-	int maxValue,
-	MObject affectingOutput);
+	const MinMaxData<int>& minmaxData,
+	const vector<MObject> & affectingOutput);
 
 MObject CreateBooleanAttribute(
 	const string& longName,
 	const string& shortName,
 	bool defaultValue,
-	MObject affectingOutput);
+	const vector<MObject> & affectingOutput);
 
 MObject CreateColor3Attribute(
 	const string& longName,
 	const string& shortName,
 	const vector<float>& defaultColor,
-	MObject affectingOutput);
-
-MObject CreateStringAttribute(
-	const string& longName,
-	const string& shortName,
-	bool isFilename,
-	MObject affectingOutput);
-
-MObject Create4x4MatrixAttribute(
-	const string& longName,
-	const string& shortName,
-	const MMatrix& defaultMatrix,
-	MObject affectingOutput);
+	const vector<MObject> & affectingOutput);
 
 MObject CreateStringEnumAttribute(
 	const string& longName,
 	const string& shortName,
 	const vector<string>& values,
 	string defaultValue,
-	MObject affectingOutput);
+	const vector<MObject> & affectingOutput);
+
+MObject CreateStringAttribute(
+	const string& longName,
+	const string& shortName,
+	bool isFilename,
+	const vector<MObject> & affectingOutput);
+
+MObject Create4x4MatrixAttribute(
+	const string& longName,
+	const string& shortName,
+	const MMatrix& defaultMatrix,
+	const vector<MObject> & affectingOutput);
