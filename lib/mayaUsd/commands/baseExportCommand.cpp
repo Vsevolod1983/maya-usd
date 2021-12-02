@@ -16,12 +16,10 @@
 //
 #include "baseExportCommand.h"
 
-#include <mayaUsd/fileio/exportContextRegistry.h>
 #include <mayaUsd/fileio/jobs/jobArgs.h>
 #include <mayaUsd/fileio/shading/shadingModeRegistry.h>
 #include <mayaUsd/fileio/utils/writeUtil.h>
 
-#include <pxr/base/tf/debug.h>
 #include <pxr/pxr.h>
 
 #include <maya/MArgDatabase.h>
@@ -65,16 +63,17 @@ MSyntax MayaUSDExportCommand::createSyntax()
         kConvertMaterialsToFlag,
         UsdMayaJobExportArgsTokens->convertMaterialsTo.GetText(),
         MSyntax::kString);
+    syntax.makeFlagMultiUse(kConvertMaterialsToFlag);
     syntax.addFlag(
         kMaterialsScopeNameFlag,
         UsdMayaJobExportArgsTokens->materialsScopeName.GetText(),
         MSyntax::kString);
     syntax.addFlag(
         kApiSchemaFlag, UsdMayaJobExportArgsTokens->apiSchema.GetText(), MSyntax::kString);
-    syntax.makeFlagMultiUse(UsdMayaJobExportArgsTokens->apiSchema.GetText());
+    syntax.makeFlagMultiUse(kApiSchemaFlag);
     syntax.addFlag(
-        kExtraContextFlag, UsdMayaJobExportArgsTokens->extraContext.GetText(), MSyntax::kString);
-    syntax.makeFlagMultiUse(UsdMayaJobExportArgsTokens->extraContext.GetText());
+        kJobContextFlag, UsdMayaJobExportArgsTokens->jobContext.GetText(), MSyntax::kString);
+    syntax.makeFlagMultiUse(kJobContextFlag);
     syntax.addFlag(
         kExportUVsFlag, UsdMayaJobExportArgsTokens->exportUVs.GetText(), MSyntax::kBoolean);
     syntax.addFlag(
@@ -116,6 +115,10 @@ MSyntax MayaUSDExportCommand::createSyntax()
         UsdMayaJobExportArgsTokens->exportVisibility.GetText(),
         MSyntax::kBoolean);
     syntax.addFlag(
+        kExportComponentTagsFlag,
+        UsdMayaJobExportArgsTokens->exportComponentTags.GetText(),
+        MSyntax::kBoolean);
+    syntax.addFlag(
         kIgnoreWarningsFlag,
         UsdMayaJobExportArgsTokens->ignoreWarnings.GetText(),
         MSyntax::kBoolean);
@@ -149,7 +152,7 @@ MSyntax MayaUSDExportCommand::createSyntax()
         kCompatibilityFlag, UsdMayaJobExportArgsTokens->compatibility.GetText(), MSyntax::kString);
 
     syntax.addFlag(kChaserFlag, UsdMayaJobExportArgsTokens->chaser.GetText(), MSyntax::kString);
-    syntax.makeFlagMultiUse(UsdMayaJobExportArgsTokens->chaser.GetText());
+    syntax.makeFlagMultiUse(kChaserFlag);
 
     syntax.addFlag(
         kChaserArgsFlag,
@@ -157,7 +160,7 @@ MSyntax MayaUSDExportCommand::createSyntax()
         MSyntax::kString,
         MSyntax::kString,
         MSyntax::kString);
-    syntax.makeFlagMultiUse(UsdMayaJobExportArgsTokens->chaserArgs.GetText());
+    syntax.makeFlagMultiUse(kChaserArgsFlag);
 
     syntax.addFlag(
         kMelPerFrameCallbackFlag,
@@ -241,30 +244,8 @@ MStatus MayaUSDExportCommand::doIt(const MArgList& args)
         }
 
         // Read all of the dictionary args first.
-        VtDictionary userArgs = UsdMayaUtil::GetDictionaryFromArgDatabase(
+        const VtDictionary userArgs = UsdMayaUtil::GetDictionaryFromArgDatabase(
             argData, UsdMayaJobExportArgs::GetDefaultDictionary());
-
-        // Run all export context callbacks to get the final userArgs:
-        const TfToken& xcKey = UsdMayaJobExportArgsTokens->extraContext;
-        if (VtDictionaryIsHolding<std::vector<VtValue>>(userArgs, xcKey)) {
-            // Making a copy. Required because userArgs can be modified by callbacks.
-            std::vector<VtValue> vals = VtDictionaryGet<std::vector<VtValue>>(userArgs, xcKey);
-            for (const VtValue& v : vals) {
-                if (v.IsHolding<std::string>()) {
-                    const TfToken exportContext(v.UncheckedGet<std::string>());
-                    const UsdMayaExportContextRegistry::ContextInfo& ci
-                        = UsdMayaExportContextRegistry::GetExportContextInfo(exportContext);
-                    if (ci.enablerCallback) {
-                        ci.enablerCallback(userArgs);
-                    } else {
-                        MGlobal::displayWarning(
-                            TfStringPrintf(
-                                "Ignoring unknown export context '%s'.", exportContext.GetText())
-                                .c_str());
-                    }
-                }
-            }
-        }
 
         // Now read all of the other args that are specific to this command.
         bool        append = false;
@@ -349,8 +330,7 @@ MStatus MayaUSDExportCommand::doIt(const MArgList& args)
             std::string rootPath = tmpArgList.asString(0).asChar();
 
             if (!rootPath.empty()) {
-                MDagPath rootDagPath;
-                UsdMayaUtil::GetDagPathByName(rootPath, rootDagPath);
+                MDagPath rootDagPath = UsdMayaUtil::nameToDagPath(rootPath);
                 if (!rootDagPath.isValid()) {
                     MGlobal::displayError(
                         MString("Invalid dag path provided for exportRoot: ")
@@ -364,13 +344,6 @@ MStatus MayaUSDExportCommand::doIt(const MArgList& args)
             = UsdMayaWriteUtil::GetTimeSamples(timeInterval, frameSamples, frameStride);
         UsdMayaJobExportArgs jobArgs
             = UsdMayaJobExportArgs::CreateFromDictionary(userArgs, dagPaths, timeSamples);
-
-        unsigned int numFilteredTypes = argData.numberOfFlagUses(kFilterTypesFlag);
-        for (unsigned int i = 0; i < numFilteredTypes; i++) {
-            MArgList tmpArgList;
-            argData.getFlagArgumentList(kFilterTypesFlag, i, tmpArgList);
-            jobArgs.AddFilteredTypeName(tmpArgList.asString(0));
-        }
 
         std::unique_ptr<UsdMaya_WriteJob> writeJob = initializeWriteJob(jobArgs);
         if (!writeJob || !writeJob->Write(fileName, append)) {

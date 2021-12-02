@@ -27,8 +27,6 @@ from AL import usdmaya
 
 from pxr import Usd, UsdUtils, Tf
 
-import fixturesUtils
-
 class CubeGenerator(usdmaya.TranslatorBase):
     '''
     Basic Translator which doesn't support update
@@ -181,6 +179,50 @@ class DeleteParentNodeOnPostImport(usdmaya.TranslatorBase):
     def exportObject(self, stage, path, usdPath, params):
         return
 
+class UpdateableTranslator(usdmaya.TranslatorBase):
+
+    def initialize(self):
+        self.actions = []
+        return True
+
+    def getTranslatedType(self):
+        return Tf.Type.Unknown
+
+    def needsTransformParent(self):
+        return True
+
+    def supportsUpdate(self):
+        return True
+
+    def importableByDefault(self):
+        return True
+
+    def importObject(self, prim, parent=None):
+        self.actions.append('import ' + str(prim.GetPath()))
+        return True
+
+    def postImport(self, prim):
+        self.actions.append('postImport ' + str(prim.GetPath()))
+        return True
+
+    def generateUniqueKey(self, prim):
+        return str(prim.GetPath())
+
+    def update(self, prim):
+        self.actions.append('update ' + str(prim.GetPath()))
+        return True
+
+    def preTearDown(self, prim):
+        return True
+
+    def tearDown(self, path):
+        return True
+
+    def canExport(self, mayaObjectName):
+        return False
+
+    def exportObject(self, stage, path, usdPath, params):
+        return
 
 class TestPythonTranslators(unittest.TestCase):
 
@@ -416,6 +458,31 @@ class TestPythonTranslators(unittest.TestCase):
         self.assertEqual(DeleteParentNodeOnPostImport.nbPreTeardown, 0)
 
         vs.SetVariantSelection("noCubes")
+
+    def test_import_and_update_consistency(self):
+        '''
+        test consistency when called via TranslatePrim, or triggered via onObjectsChanged
+        '''
+        updateableTranslator = UpdateableTranslator()
+        usdmaya.TranslatorBase.registerTranslator(updateableTranslator, 'test')
+
+        stage = Usd.Stage.Open("../test_data/translator_update_postimport.usda")
+        stageCache = UsdUtils.StageCache.Get()
+        stageCache.Insert(stage)
+        stageId = stageCache.GetId(stage)
+        shapeName = 'updateProxyShape'
+        cmds.AL_usdmaya_ProxyShapeImport(stageId=stageId.ToLongInt(), name=shapeName)
+
+        # Verify if the methods have been called
+        self.assertTrue("import /root/peter01/rig" in updateableTranslator.actions)
+        self.assertTrue("postImport /root/peter01/rig" in updateableTranslator.actions)
+        # "update()" method should not be called
+        self.assertFalse("update /root/peter01/rig" in updateableTranslator.actions)
+
+        updateableTranslator.actions = []
+        cmds.AL_usdmaya_TranslatePrim(up="/root/peter01/rig", fi=True, proxy=shapeName)
+        # "update()" should have been called
+        self.assertTrue("update /root/peter01/rig" in updateableTranslator.actions)
 
 
 class TestTranslatorUniqueKey(usdmaya.TranslatorBase):
@@ -677,5 +744,11 @@ class TestPythonTranslatorsUniqueKey(unittest.TestCase):
         self.assertTrue(cmds.objExists('|bindings_grp|root|dynamic_five_cubes'))
 
 
-if __name__ == '__main__':
-    fixturesUtils.runTests(globals())
+if __name__ == "__main__":
+
+    tests = [unittest.TestLoader().loadTestsFromTestCase(TestPythonTranslators)]
+    tests += [unittest.TestLoader().loadTestsFromTestCase(TestPythonTranslatorsUniqueKey)]
+
+    results = [unittest.TextTestRunner(verbosity=2).run(test) for test in tests]
+    exitCode = int(not all([result.wasSuccessful() for result in results]))
+    cmds.quit(force=True, exitCode=(exitCode))

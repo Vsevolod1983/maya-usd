@@ -1,5 +1,5 @@
 //
-// Copyright 2020 Autodesk
+// Copyright 2021 Autodesk
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@
 //
 #include <mayaUsd/fileio/chaser/exportChaser.h>
 #include <mayaUsd/fileio/chaser/exportChaserRegistry.h>
-#include <mayaUsd/fileio/exportContextRegistry.h>
+#include <mayaUsd/fileio/jobContextRegistry.h>
 #include <mayaUsd/fileio/jobs/jobArgs.h>
-#include <mayaUsd/fileio/schemaApiWriter.h>
-#include <mayaUsd/fileio/schemaApiWriterRegistry.h>
+#include <mayaUsd/fileio/schemaApiAdaptor.h>
+#include <mayaUsd/fileio/schemaApiAdaptorRegistry.h>
 #include <mayaUsd/fileio/writeJobContext.h>
 
 #include <pxr/base/tf/diagnostic.h>
@@ -26,78 +26,82 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-REGISTER_EXPORT_CONTEXT_FCT(
-    NullAPI,
-    "Null API Export",
-    "Exports an empty API for testing purpose",
-    userArgs)
+REGISTER_EXPORT_JOB_CONTEXT_FCT(NullAPI, "Null API", "Exports an empty API for testing purpose")
 {
-    auto addToVector = [](VtDictionary& userArgs, const TfToken& key, const std::string& val) {
-        std::vector<VtValue> vals;
-        if (VtDictionaryIsHolding<std::vector<VtValue>>(userArgs, key)) {
-            vals = VtDictionaryGet<std::vector<VtValue>>(userArgs, key);
-        }
-        vals.push_back(VtValue(val));
-        userArgs[key] = VtValue(vals);
-    };
-
-    addToVector(userArgs, UsdMayaJobExportArgsTokens->apiSchema, "testApi");
-    addToVector(userArgs, UsdMayaJobExportArgsTokens->chaser, "NullAPIChaser");
-
-    return true;
+    VtDictionary extraArgs;
+    extraArgs[UsdMayaJobExportArgsTokens->apiSchema]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("testApi")) });
+    extraArgs[UsdMayaJobExportArgsTokens->chaser]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("NullAPIChaser")) });
+    VtValue chaserArg(std::vector<VtValue> { VtValue(std::string("NullAPIChaser")),
+                                             VtValue(std::string("life")),
+                                             VtValue(std::string("42")) });
+    extraArgs[UsdMayaJobExportArgsTokens->chaserArgs] = VtValue(std::vector<VtValue> { chaserArg });
+    return extraArgs;
 }
 
-
-REGISTER_EXPORT_CONTEXT_FCT(
-    Thierry,
-    "Thierry",
-    "Exports for Thierry renderer",
-    userArgs)
+REGISTER_IMPORT_JOB_CONTEXT_FCT(NullAPI, "Null API", "Imports an empty API for testing purpose")
 {
-    return true;
+    VtDictionary extraArgs;
+    extraArgs[UsdMayaJobImportArgsTokens->apiSchema]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("testApiIn")) });
+    extraArgs[UsdMayaJobImportArgsTokens->chaser]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("NullAPIChaserIn")) });
+    VtValue chaserArg(std::vector<VtValue> { VtValue(std::string("NullAPIChaserIn")),
+                                             VtValue(std::string("universe")),
+                                             VtValue(std::string("42")) });
+    extraArgs[UsdMayaJobImportArgsTokens->chaserArgs] = VtValue(std::vector<VtValue> { chaserArg });
+    return extraArgs;
 }
 
-REGISTER_EXPORT_CONTEXT_FCT(
-    SceneGrinder,
-    "Scene Grinder",
-    "Exports to Scene Grinder",
-    userArgs)
+REGISTER_EXPORT_JOB_CONTEXT_FCT(Thierry, "Thierry", "Exports for Thierry renderer")
 {
-    return true;
+    return VtDictionary();
 }
 
-class TestSchemaExporter : public UsdMayaSchemaApiWriter
+REGISTER_EXPORT_JOB_CONTEXT_FCT(SceneGrinder, "Scene Grinder", "Exports to Scene Grinder")
 {
-    bool _isValid = false;
+    return VtDictionary();
+}
 
-public:
-    TestSchemaExporter(const UsdMayaPrimWriterSharedPtr& primWriter, UsdMayaWriteJobContext& jobCtx)
-        : UsdMayaSchemaApiWriter(primWriter, jobCtx)
-    {
-        const UsdMayaJobExportArgs& jobArgs = jobCtx.GetArgs();
-        for (const std::string& chaserName : jobArgs.chaserNames) {
-            if (chaserName == "NullAPIChaser") {
-                _isValid = true;
-                break;
-            }
-        }
-    }
+REGISTER_EXPORT_JOB_CONTEXT_FCT(
+    Larry,
+    "Larry's special",
+    "Test coverage of error handling part uno")
+{
+    VtDictionary extraArgs;
+    // Correct:
+    extraArgs[UsdMayaJobExportArgsTokens->apiSchema]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("testApi")) });
+    extraArgs[UsdMayaJobExportArgsTokens->geomSidedness] = VtValue(std::string("single"));
+    // Referencing another context:
+    extraArgs[UsdMayaJobExportArgsTokens->jobContext]
+        = VtValue(std::vector<VtValue> { VtValue(std::string("Curly")) });
+    return extraArgs;
+}
 
-    void Write(const UsdTimeCode&) override
-    {
-        if (!_isValid) {
-            TF_RUNTIME_ERROR("Missing chaser name NullAPIChaser in job arguments");
-        }
-        TF_RUNTIME_ERROR("Missing implementation for TestSchemaExporter::Write");
-    }
+REGISTER_EXPORT_JOB_CONTEXT_FCT(
+    Curly,
+    "Curly's special",
+    "Test coverage of error handling part deux")
+{
+    VtDictionary extraArgs;
+    // Incorrect type:
+    extraArgs[UsdMayaJobExportArgsTokens->apiSchema] = VtValue(std::string("testApi"));
+    return extraArgs;
+}
 
-    void PostExport() override
-    {
-        TF_RUNTIME_ERROR("Missing implementation for TestSchemaExporter::PostExport");
-    }
-};
-
-PXRUSDMAYA_REGISTER_SCHEMA_API_WRITER(mesh, testApi, TestSchemaExporter);
+REGISTER_EXPORT_JOB_CONTEXT_FCT(Moe, "Moe's special", "Test coverage of error handling part funf")
+{
+    VtDictionary extraArgs;
+    // Moe is conflicting on value with Larry, but merges nicely with NullAPI:
+    extraArgs[UsdMayaJobExportArgsTokens->geomSidedness] = VtValue(std::string("double"));
+    VtValue chaserArg(std::vector<VtValue> { VtValue(std::string("NullAPIChaser")),
+                                             VtValue(std::string("genre")),
+                                             VtValue(std::string("slapstick")) });
+    extraArgs[UsdMayaJobExportArgsTokens->chaserArgs] = VtValue(std::vector<VtValue> { chaserArg });
+    return extraArgs;
+}
 
 // We added this dummy chaser with the export context.
 
@@ -116,31 +120,5 @@ public:
 };
 
 PXRUSDMAYA_DEFINE_EXPORT_CHASER_FACTORY(NullAPIChaser, ctx) { return new NullAPIChaser(); }
-
-// The following exporter gets registered for a schema that is not in the list.
-// It should not execute.
-
-class UnusedSchemaExporter : public UsdMayaSchemaApiWriter
-{
-public:
-    UnusedSchemaExporter(
-        const UsdMayaPrimWriterSharedPtr& primWriter,
-        UsdMayaWriteJobContext&           jobCtx)
-        : UsdMayaSchemaApiWriter(primWriter, jobCtx)
-    {
-    }
-
-    void Write(const UsdTimeCode&) override
-    {
-        TF_RUNTIME_ERROR("SHOULD NOT BE CALLED: UnusedSchemaExporter::Write");
-    }
-
-    void PostExport() override
-    {
-        TF_RUNTIME_ERROR("SHOULD NOT BE CALLED: UnusedSchemaExporter::PostExport");
-    }
-};
-
-PXRUSDMAYA_REGISTER_SCHEMA_API_WRITER(mesh, unusedApi, UnusedSchemaExporter);
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -20,6 +20,20 @@
 #include "AL/usdmaya/nodes/ProxyShape.h"
 #include "AL/usdmaya/nodes/Transform.h"
 
+#include <mayaUsd/nodes/proxyShapePlugin.h>
+
+#include <maya/MProfiler.h>
+namespace {
+const int _proxyShapeMetadataProfilerCategory = MProfiler::addCategory(
+#if MAYA_API_VERSION >= 20190000
+    "AL_usdmaya_ProxyShape_selection",
+    "AL_usdmaya_ProxyShape_selection"
+#else
+    "AL_usdmaya_ProxyShape_selection"
+#endif
+);
+} // namespace
+
 namespace AL {
 namespace usdmaya {
 namespace nodes {
@@ -27,6 +41,9 @@ namespace nodes {
 //----------------------------------------------------------------------------------------------------------------------
 void ProxyShape::removeMetaData(const SdfPathVector& removedPaths)
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory, MProfiler::kColorE_L3, "Remove metadata");
+
     TF_DEBUG(ALUSDMAYA_EVENTS).Msg("ProxyShape::removeMetaData");
 
     m_selectabilityDB.removePathsAsUnselectable(removedPaths);
@@ -38,6 +55,9 @@ void ProxyShape::processChangedMetaData(
     const SdfPathVector& resyncedPaths,
     const SdfPathVector& changedOnlyPaths)
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory, MProfiler::kColorE_L3, "Process changed metadata");
+
     TF_DEBUG(ALUSDMAYA_EVENTS)
         .Msg(
             "ProxyShape::processChangedMetaData - processing changes %lu %lu\n",
@@ -82,13 +102,14 @@ void ProxyShape::processChangedMetaData(
                 m_lockManager.setInherited(path);
             }
         }
-        m_lockManager.sort();
-    } else {
+    }
+    bool excludedPrimsModified = false;
+    {
         auto& unselectablePaths = m_selectabilityDB.m_unselectablePaths;
 
         // figure out whether selectability has changed.
         for (const SdfPath& path : resyncedPaths) {
-            UsdPrim syncPrimRoot = m_stage->GetPrimAtPath(path);
+            const UsdPrim syncPrimRoot = m_stage->GetPrimAtPath(path);
             if (!syncPrimRoot) {
                 // TODO : Ensure elements have been removed from selectabilityDB, excludeGeom, and
                 // lock prims
@@ -123,27 +144,31 @@ void ProxyShape::processChangedMetaData(
             // from the resync prim, traverse downwards through the child prims
             for (fileio::TransformIterator it(syncPrimRoot, parentTransform(), true); !it.done();
                  it.next()) {
-                auto prim = it.prim();
-                auto path = prim.GetPath();
+                const auto prim = it.prim();
+                const auto path = prim.GetPath();
 
                 // first check to see if the excluded geom has changed
                 {
                     bool excludeGeo = false;
                     if (prim.GetMetadata(Metadata::excludeFromProxyShape, &excludeGeo)
                         && excludeGeo) {
-                        auto last = m_excludedTaggedGeometry.begin() + lastTaggedPrim;
-                        auto it = std::lower_bound(m_excludedTaggedGeometry.begin(), last, path);
+                        const auto last = m_excludedTaggedGeometry.begin() + lastTaggedPrim;
+                        const auto it
+                            = std::lower_bound(m_excludedTaggedGeometry.begin(), last, path);
                         if (it != last && *it == path) {
                             // we already have an entry for this prim
                         } else {
                             // add to back of list
+                            excludedPrimsModified = true;
                             m_excludedTaggedGeometry.emplace_back(path);
                         }
                     } else {
                         // if we aren't excluding the geom, but have an existing entry, remove it.
-                        auto last = m_excludedTaggedGeometry.begin() + lastTaggedPrim;
-                        auto it = std::lower_bound(m_excludedTaggedGeometry.begin(), last, path);
+                        const auto last = m_excludedTaggedGeometry.begin() + lastTaggedPrim;
+                        const auto it
+                            = std::lower_bound(m_excludedTaggedGeometry.begin(), last, path);
                         if (it != last && *it == path) {
+                            excludedPrimsModified = true;
                             m_excludedTaggedGeometry.erase(it);
                             --lastTaggedPrim;
                         }
@@ -202,14 +227,26 @@ void ProxyShape::processChangedMetaData(
     {
         constructLockPrims();
     }
+
+    if (excludedPrimsModified) {
+        if (MayaUsdProxyShapePlugin::useVP2_NativeUSD_Rendering()) {
+            _IncreaseExcludePrimPathsVersion();
+        } else {
+            constructGLImagingEngine();
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 void ProxyShape::constructExcludedPrims()
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory, MProfiler::kColorE_L3, "Construct excluded prims");
+
     auto excludedPaths = getExcludePrimPaths();
     if (m_excludedGeometry != excludedPaths) {
         std::swap(m_excludedGeometry, excludedPaths);
+        _IncreaseExcludePrimPathsVersion();
         constructGLImagingEngine();
     }
 }
@@ -217,6 +254,9 @@ void ProxyShape::constructExcludedPrims()
 //----------------------------------------------------------------------------------------------------------------------
 void ProxyShape::constructLockPrims()
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory, MProfiler::kColorE_L3, "Construct lock prims");
+
     TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::constructLockPrims\n");
 
     // iterate over the
@@ -256,6 +296,11 @@ void ProxyShape::constructLockPrims()
 //----------------------------------------------------------------------------------------------------------------------
 bool ProxyShape::primHasExcludedParent(UsdPrim prim)
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory,
+        MProfiler::kColorE_L3,
+        "Check excluded parent for prim");
+
     if (prim.IsValid()) {
         SdfPath primPath = prim.GetPrimPath();
         TF_FOR_ALL(excludedPath, m_excludedTaggedGeometry)
@@ -274,6 +319,9 @@ bool ProxyShape::primHasExcludedParent(UsdPrim prim)
 //----------------------------------------------------------------------------------------------------------------------
 void ProxyShape::findPrimsWithMetaData()
 {
+    MProfilingScope profilerScope(
+        _proxyShapeMetadataProfilerCategory, MProfiler::kColorE_L3, "Find prims with metadata");
+
     TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::findPrimsWithMetaData\n");
     if (!m_stage)
         return;
@@ -330,10 +378,21 @@ SdfPathVector ProxyShape::getExcludePrimPaths() const
 {
     TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::getExcludePrimPaths\n");
 
-    SdfPathVector paths = getPrimPathsFromCommaJoinedString(excludePrimPathsPlug().asString());
-    SdfPathVector temp
-        = getPrimPathsFromCommaJoinedString(excludedTranslatedGeometryPlug().asString());
+    SdfPathVector paths = m_excludedTaggedGeometry;
+    SdfPathVector temp = getPrimPathsFromCommaJoinedString(excludePrimPathsPlug().asString());
     paths.insert(paths.end(), temp.begin(), temp.end());
+    temp = getPrimPathsFromCommaJoinedString(excludedTranslatedGeometryPlug().asString());
+    paths.insert(paths.end(), temp.begin(), temp.end());
+
+    const auto& translatedGeo = m_context->excludedGeometry();
+
+    // combine the excluded paths
+    paths.insert(paths.end(), m_excludedTaggedGeometry.begin(), m_excludedTaggedGeometry.end());
+    paths.insert(paths.end(), m_excludedGeometry.begin(), m_excludedGeometry.end());
+    for (auto& it : translatedGeo) {
+        paths.push_back(it.second);
+    }
+
     return paths;
 }
 

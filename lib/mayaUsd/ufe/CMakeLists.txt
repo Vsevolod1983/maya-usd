@@ -56,6 +56,7 @@ if(CMAKE_UFE_V2_FEATURES_AVAILABLE)
             UsdTransform3dSetObjectMatrix.cpp
             UsdTransform3dUndoableCommands.cpp
             UsdUIInfoHandler.cpp
+            UsdUIUfeObserver.cpp
             UsdUndoAddNewPrimCommand.cpp
             UsdUndoCreateGroupCommand.cpp
             UsdUndoInsertChildCommand.cpp
@@ -70,6 +71,9 @@ endif()
 if(CMAKE_UFE_V3_FEATURES_AVAILABLE)
     target_sources(${PROJECT_NAME}
         PRIVATE
+            PulledObjectHierarchy.cpp
+            PulledObjectHierarchyHandler.cpp
+            UsdPathMappingHandler.cpp
             UsdUndoUngroupCommand.cpp
     )
 endif()
@@ -129,6 +133,7 @@ if(CMAKE_UFE_V2_FEATURES_AVAILABLE)
         UsdTransform3dSetObjectMatrix.h
         UsdTransform3dUndoableCommands.h
         UsdUIInfoHandler.h
+        UsdUIUfeObserver.h
         UsdUndoableCommand.h
         UsdUndoAddNewPrimCommand.h
         UsdUndoCreateGroupCommand.h
@@ -142,6 +147,9 @@ endif()
 
 if(CMAKE_UFE_V3_FEATURES_AVAILABLE)
     list(APPEND HEADERS
+        PulledObjectHierarchy.h
+        PulledObjectHierarchyHandler.h
+        UsdPathMappingHandler.h
         UsdUndoUngroupCommand.h
     )
 endif()

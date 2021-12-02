@@ -18,6 +18,9 @@
 #include "AL/maya/utils/Utils.h"
 #include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/TypeIDs.h"
+#include "pxr/usd/ar/resolver.h"
+
+#include <mayaUsd/listeners/notice.h>
 
 #include <pxr/usd/sdf/textFileFormat.h>
 #include <pxr/usd/usd/usdFileFormat.h>
@@ -29,9 +32,46 @@
 #include <maya/MFnDependencyNode.h>
 #include <maya/MGlobal.h>
 #include <maya/MItDependencyNodes.h>
+#include <maya/MObjectHandle.h>
 #include <maya/MPlugArray.h>
+#include <maya/MProfiler.h>
 
 #include <mutex>
+
+namespace {
+const int _layerManagerProfilerCategory = MProfiler::addCategory(
+#if MAYA_API_VERSION >= 20190000
+    "LayerManager",
+    "LayerManager"
+#else
+    "LayerManager"
+#endif
+);
+
+MObjectHandle theLayerManagerHandle;
+
+struct _OnSceneResetListener : public TfWeakBase
+{
+    _OnSceneResetListener()
+    {
+        TF_DEBUG(ALUSDMAYA_LAYERS).Msg("Created _OnSceneResetListener\n");
+        TfWeakPtr<_OnSceneResetListener> me(this);
+        TfNotice::Register(me, &_OnSceneResetListener::OnSceneReset);
+    }
+
+    ~_OnSceneResetListener()
+    {
+        TF_DEBUG(ALUSDMAYA_LAYERS).Msg("Destroyed _OnSceneResetListener\n");
+    }
+
+    void OnSceneReset(const UsdMayaSceneResetNotice& notice)
+    {
+        TF_DEBUG(ALUSDMAYA_LAYERS).Msg("_OnSceneResetListener: Clearing LayerManager Cache\n");
+        theLayerManagerHandle = MObject::kNullObj;
+    }
+};
+
+} // namespace
 
 namespace {
 // Global mutex protecting _findNode / findOrCreateNode.
@@ -228,6 +268,7 @@ AL_MAYA_DEFINE_NODE(LayerManager, AL_USDMAYA_LAYERMANAGER, AL_usdmaya);
 // serialization
 MObject LayerManager::m_layers = MObject::kNullObj;
 MObject LayerManager::m_identifier = MObject::kNullObj;
+MObject LayerManager::m_fileFormatId = MObject::kNullObj;
 MObject LayerManager::m_serialized = MObject::kNullObj;
 MObject LayerManager::m_anonymous = MObject::kNullObj;
 
@@ -260,6 +301,8 @@ MStatus LayerManager::initialise()
 
         // add attributes to store the serialization info
         m_identifier = addStringAttr("identifier", "id", kCached | kReadable | kStorable | kHidden);
+        m_fileFormatId
+            = addStringAttr("fileFormatId", "fid", kCached | kReadable | kStorable | kHidden);
         m_serialized
             = addStringAttr("serialized", "szd", kCached | kReadable | kStorable | kHidden);
         m_anonymous
@@ -269,11 +312,12 @@ MStatus LayerManager::initialise()
             "lyr",
             kCached | kReadable | kWritable | kStorable | kConnectable | kHidden | kArray
                 | kUsesArrayDataBuilder,
-            { m_identifier, m_serialized, m_anonymous });
+            { m_identifier, m_fileFormatId, m_serialized, m_anonymous });
     } catch (const MStatus& status) {
         return status;
     }
     generateAETemplate();
+    static _OnSceneResetListener onSceneResetListener;
     return MS::kSuccess;
 }
 
@@ -287,12 +331,24 @@ MObject LayerManager::findNode()
 //----------------------------------------------------------------------------------------------------------------------
 MObject LayerManager::_findNode()
 {
+    if (theLayerManagerHandle.isValid() && theLayerManagerHandle.isAlive()) {
+        MObject theManager { theLayerManagerHandle.object() };
+        if (!theManager.isNull()) {
+            return theManager;
+        } else {
+            TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::_findNode cache got null mobject\n");
+        }
+    } else {
+        TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::_findNode cache got invalid mobjecthandle\n");
+    }
+
     MFnDependencyNode  fn;
     MItDependencyNodes iter(MFn::kPluginDependNode);
     for (; !iter.isDone(); iter.next()) {
         MObject mobj = iter.item();
         fn.setObject(mobj);
         if (fn.typeId() == kTypeId && !fn.isFromReferencedFile()) {
+            theLayerManagerHandle = mobj;
             return mobj;
         }
     }
@@ -386,6 +442,9 @@ void LayerManager::getLayerIdentifiers(MStringArray& outputNames)
 //----------------------------------------------------------------------------------------------------------------------
 MStatus LayerManager::populateSerialisationAttributes()
 {
+    MProfilingScope profilerScope(
+        _layerManagerProfilerCategory, MProfiler::kColorE_L3, "Populate serialisation attributes");
+
     TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::populateSerialisationAttributes\n");
     const char* errorString = "LayerManager::populateSerialisationAttributes";
 
@@ -411,6 +470,9 @@ MStatus LayerManager::populateSerialisationAttributes()
             AL_MAYA_CHECK_ERROR(status, errorString);
             MDataHandle idHandle = layersElemHandle.child(m_identifier);
             idHandle.setString(AL::maya::utils::convert(layer->GetIdentifier()));
+            MDataHandle fileFormatIdHandle = layersElemHandle.child(m_fileFormatId);
+            auto        fileFormatIdToken = layer->GetFileFormat()->GetFormatId();
+            fileFormatIdHandle.setString(AL::maya::utils::convert(fileFormatIdToken.GetString()));
             MDataHandle serializedHandle = layersElemHandle.child(m_serialized);
             layer->ExportToString(&temp);
             serializedHandle.setString(AL::maya::utils::convert(temp));
@@ -426,6 +488,9 @@ MStatus LayerManager::populateSerialisationAttributes()
 
 MStatus LayerManager::clearSerialisationAttributes()
 {
+    MProfilingScope profilerScope(
+        _layerManagerProfilerCategory, MProfiler::kColorE_L3, "Clear serialisation attributes");
+
     TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::clearSerialisationAttributes\n");
     const char* errorString = "LayerManager::clearSerialisationAttributes";
 
@@ -450,6 +515,9 @@ MStatus LayerManager::clearSerialisationAttributes()
 
 void LayerManager::loadAllLayers()
 {
+    MProfilingScope profilerScope(
+        _layerManagerProfilerCategory, MProfiler::kColorE_L3, "Load all layers");
+
     TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::loadAllLayers\n");
     const char*    errorString = "LayerManager::loadAllLayers";
     const char*    identifierTempSuffix = "_tmp";
@@ -457,9 +525,11 @@ void LayerManager::loadAllLayers()
     MPlug          allLayersPlug = layersPlug();
     MPlug          singleLayerPlug;
     MPlug          idPlug;
+    MPlug          fileFormatIdPlug;
     MPlug          anonymousPlug;
     MPlug          serializedPlug;
     std::string    identifierVal;
+    std::string    fileFormatIdVal;
     std::string    serializedVal;
     SdfLayerRefPtr layer;
     // We DON'T want to use evaluate num elements, because we don't want to trigger
@@ -469,6 +539,8 @@ void LayerManager::loadAllLayers()
         singleLayerPlug = allLayersPlug.elementByPhysicalIndex(i, &status);
         AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
         idPlug = singleLayerPlug.child(m_identifier, &status);
+        AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
+        fileFormatIdPlug = singleLayerPlug.child(m_fileFormatId, &status);
         AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
         anonymousPlug = singleLayerPlug.child(m_anonymous, &status);
         AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
@@ -481,6 +553,13 @@ void LayerManager::loadAllLayers()
             MGlobal::displayError(
                 MString("Error - plug ") + idPlug.partialName(true) + "had empty identifier");
             continue;
+        }
+        fileFormatIdVal = fileFormatIdPlug.asString(MDGContext::fsNormal, &status).asChar();
+        AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
+        if (fileFormatIdVal.empty()) {
+            MGlobal::displayInfo(
+                MString("No file format in ") + fileFormatIdPlug.partialName(true)
+                + " plug. Will use identifier to work it out.");
         }
         serializedVal = serializedPlug.asString(MDGContext::fsNormal, &status).asChar();
         AL_MAYA_CHECK_ERROR_CONTINUE(status, errorString);
@@ -509,18 +588,17 @@ void LayerManager::loadAllLayers()
                 // discussion with Pixar to find a way to avoid this.
 
                 SdfFileFormatConstPtr fileFormat;
-                if (TfStringStartsWith(serializedVal, "#usda ")) {
-                    // In order to make the layer reloadable by SdfLayer::Reload(), we need the
-                    // correct file format from identifier.
-                    if (TfStringEndsWith(identifierVal, ".usd")) {
-                        fileFormat = SdfFileFormat::FindById(UsdUsdFileFormatTokens->Id);
-                    } else if (TfStringEndsWith(identifierVal, ".usdc")) {
-                        fileFormat = SdfFileFormat::FindById(UsdUsdcFileFormatTokens->Id);
-                    } else {
-                        fileFormat = SdfFileFormat::FindById(UsdUsdaFileFormatTokens->Id);
-                    }
+                if (!fileFormatIdVal.empty()) {
+                    fileFormat = SdfFileFormat::FindById(TfToken(fileFormatIdVal));
                 } else {
-                    fileFormat = SdfFileFormat::FindById(SdfTextFileFormatTokens->Id);
+                    fileFormat = SdfFileFormat::FindByExtension(
+                        ArGetResolver().GetExtension(identifierVal));
+                    if (!fileFormat) {
+                        MGlobal::displayError(
+                            MString("Cannot determine file format for identifier '")
+                            + identifierVal.c_str() + "' for plug " + idPlug.partialName(true));
+                        continue;
+                    }
                 }
 
                 // In order to make the layer reloadable by SdfLayer::Reload(), we hack the

@@ -51,7 +51,6 @@ MStatus UsdMayaExportTranslator::writer(
     const MString&                    optionsString,
     MPxFileTranslator::FileAccessMode mode)
 {
-
     // If we are in neither of these modes then there won't be anything to do
     if (mode != MPxFileTranslator::kExportActiveAccessMode
         && mode != MPxFileTranslator::kExportAccessMode) {
@@ -67,7 +66,6 @@ MStatus UsdMayaExportTranslator::writer(
 
     std::set<double> frameSamples;
 
-    MStringArray filteredTypes;
     // Get the options
     if (optionsString.length() > 0) {
         MStringArray optionList;
@@ -97,7 +95,15 @@ MStatus UsdMayaExportTranslator::writer(
             } else if (argName == "frameStride") {
                 frameStride = theOption[1].asDouble();
             } else if (argName == "filterTypes") {
+                std::vector<VtValue> userArgVals;
+                MStringArray         filteredTypes;
                 theOption[1].split(',', filteredTypes);
+                unsigned int nbTypes = filteredTypes.length();
+                for (unsigned int idxType = 0; idxType < nbTypes; ++idxType) {
+                    const std::string filteredType = filteredTypes[idxType].asChar();
+                    userArgVals.emplace_back(filteredType);
+                }
+                userArgs[UsdMayaJobExportArgsTokens->filterTypes] = userArgVals;
             } else if (argName == "frameSample") {
                 frameSamples.clear();
                 MStringArray samplesStrings;
@@ -119,8 +125,7 @@ MStatus UsdMayaExportTranslator::writer(
                     const std::string exportRootPath = exportRootStrings[idxRoot].asChar();
 
                     if (!exportRootPath.empty()) {
-                        MDagPath rootDagPath;
-                        UsdMayaUtil::GetDagPathByName(exportRootPath, rootDagPath);
+                        MDagPath rootDagPath = UsdMayaUtil::nameToDagPath(exportRootPath);
                         if (!rootDagPath.isValid()) {
                             MGlobal::displayError(
                                 MString("Invalid dag path provided for export root: ")
@@ -205,11 +210,6 @@ MStatus UsdMayaExportTranslator::writer(
         = UsdMayaWriteUtil::GetTimeSamples(timeInterval, frameSamples, frameStride);
     PXR_NS::UsdMayaJobExportArgs jobArgs
         = PXR_NS::UsdMayaJobExportArgs::CreateFromDictionary(userArgs, dagPaths, timeSamples);
-
-    unsigned int len = filteredTypes.length();
-    for (unsigned int i = 0; i < len; ++i) {
-        jobArgs.AddFilteredTypeName(filteredTypes[i].asChar());
-    }
 
     UsdMaya_WriteJob writeJob(jobArgs);
     if (!writeJob.Write(fileName, append)) {

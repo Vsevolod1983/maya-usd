@@ -25,7 +25,19 @@
 
 #include <maya/MFileIO.h>
 #include <maya/MFnTransform.h>
+#include <maya/MProfiler.h>
 #include <maya/MViewport2Renderer.h>
+
+namespace {
+const int _transformationMatrixProfilerCategory = MProfiler::addCategory(
+#if MAYA_API_VERSION >= 20190000
+    "TransformationMatrix",
+    "TransformationMatrix"
+#else
+    "TransformationMatrix"
+#endif
+);
+} // namespace
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -34,6 +46,17 @@ namespace usdmaya {
 namespace nodes {
 namespace {
 using AL::usdmaya::utils::UsdDataType;
+
+//----------------------------------------------------------------------------------------------------------------------
+UsdTimeCode getTimeCodeForOp(const UsdGeomXformOp& op, const UsdTimeCode& time)
+{
+    // Return the current time code if xform op has samples, return default time code otherwise
+    // This function could be made as an option in proxy node
+    if (op.GetNumTimeSamples()) {
+        return time;
+    }
+    return UsdTimeCode::Default();
+}
 
 //----------------------------------------------------------------------------------------------------------------------
 bool hasEmptyDefaultValue(const UsdGeomXformOp& op, UsdTimeCode time)
@@ -116,6 +139,9 @@ TransformationMatrix::TransformationMatrix(const UsdPrim& prim)
 //----------------------------------------------------------------------------------------------------------------------
 void TransformationMatrix::setPrim(const UsdPrim& prim, Scope* transformNode)
 {
+    MProfilingScope profilerScope(
+        _transformationMatrixProfilerCategory, MProfiler::kColorE_L3, "Set prim");
+
     m_enableUsdWriteback = false;
     if (prim.IsValid()) {
         TF_DEBUG(ALUSDMAYA_TRANSFORM_MATRIX)
@@ -269,7 +295,7 @@ bool TransformationMatrix::pushVector(
         GfVec3d oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue) {
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, getTimeCodeForOp(op, timeCode)));
         }
     } break;
 
@@ -278,7 +304,7 @@ bool TransformationMatrix::pushVector(
         GfVec3f oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue) {
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, getTimeCodeForOp(op, timeCode)));
         }
     } break;
 
@@ -287,7 +313,7 @@ bool TransformationMatrix::pushVector(
         GfVec3h oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue) {
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, getTimeCodeForOp(op, timeCode)));
         }
     } break;
 
@@ -296,7 +322,7 @@ bool TransformationMatrix::pushVector(
         GfVec3i oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue) {
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, getTimeCodeForOp(op, timeCode)));
         }
     } break;
 
@@ -350,7 +376,7 @@ bool TransformationMatrix::pushShear(
         GfMatrix4d oldValue;
         op.Get(&oldValue, timeCode);
         if (m != oldValue)
-            op.Set(m, timeCode);
+            op.Set(m, getTimeCodeForOp(op, timeCode));
     } break;
 
     default: return false;
@@ -503,7 +529,7 @@ bool TransformationMatrix::pushMatrix(
         GfMatrix4d        oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue) {
-            const bool retValue = op.Set<GfMatrix4d>(value, timeCode);
+            const bool retValue = op.Set<GfMatrix4d>(value, getTimeCodeForOp(op, timeCode));
             if (!retValue) {
                 return false;
             }
@@ -519,6 +545,9 @@ bool TransformationMatrix::pushMatrix(
 //----------------------------------------------------------------------------------------------------------------------
 void TransformationMatrix::setFromMatrix(MObject thisNode, const MMatrix& m)
 {
+    MProfilingScope profilerScope(
+        _transformationMatrixProfilerCategory, MProfiler::kColorE_L3, "Set from matrix");
+
     double         S[3];
     MEulerRotation R;
     double         T[3];
@@ -546,6 +575,9 @@ void TransformationMatrix::setFromMatrix(MObject thisNode, const MMatrix& m)
 //----------------------------------------------------------------------------------------------------------------------
 bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, UsdTimeCode timeCode)
 {
+    MProfilingScope profilerScope(
+        _transformationMatrixProfilerCategory, MProfiler::kColorE_L3, "Push point");
+
     TF_DEBUG(ALUSDMAYA_TRANSFORM_MATRIX)
         .Msg(
             "TransformationMatrix::pushPoint %f %f %f\n%s\n",
@@ -555,7 +587,7 @@ bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, U
             op.GetOpName().GetText());
 
     if (timeCode.IsDefault() && op.GetNumTimeSamples()) {
-        if (!hasEmptyDefaultValue(op, timeCode)) {
+        if (!hasEmptyDefaultValue(op, getTimeCodeForOp(op, timeCode))) {
             return false;
         }
     }
@@ -568,7 +600,7 @@ bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, U
         GfVec3d oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue)
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kVec3f: {
@@ -576,7 +608,7 @@ bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, U
         GfVec3f oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue)
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kVec3h: {
@@ -584,7 +616,7 @@ bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, U
         GfVec3h oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue)
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kVec3i: {
@@ -592,7 +624,7 @@ bool TransformationMatrix::pushPoint(const MPoint& result, UsdGeomXformOp& op, U
         GfVec3i oldValue;
         op.Get(&oldValue, timeCode);
         if (value != oldValue)
-            op.Set(value, timeCode);
+            op.Set(value, getTimeCodeForOp(op, timeCode));
     } break;
 
     default: return false;
@@ -665,28 +697,28 @@ void TransformationMatrix::pushDouble(const double value, UsdGeomXformOp& op, Us
         GfHalf oldValue;
         op.Get(&oldValue);
         if (oldValue != GfHalf(value))
-            op.Set(GfHalf(value), timeCode);
+            op.Set(GfHalf(value), getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kFloat: {
         float oldValue;
         op.Get(&oldValue);
         if (oldValue != float(value))
-            op.Set(float(value), timeCode);
+            op.Set(float(value), getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kDouble: {
         double oldValue;
         op.Get(&oldValue);
         if (oldValue != double(value))
-            op.Set(double(value), timeCode);
+            op.Set(double(value), getTimeCodeForOp(op, timeCode));
     } break;
 
     case UsdDataType::kInt: {
         int32_t oldValue;
         op.Get(&oldValue);
         if (oldValue != int32_t(value))
-            op.Set(int32_t(value), timeCode);
+            op.Set(int32_t(value), getTimeCodeForOp(op, timeCode));
     } break;
 
     default: break;
@@ -853,6 +885,9 @@ bool TransformationMatrix::pushRotation(
 //----------------------------------------------------------------------------------------------------------------------
 void TransformationMatrix::initialiseToPrim(bool readFromPrim, Scope* transformNode)
 {
+    MProfilingScope profilerScope(
+        _transformationMatrixProfilerCategory, MProfiler::kColorE_L3, "Initialise to prim");
+
     TF_DEBUG(ALUSDMAYA_TRANSFORM_MATRIX).Msg("TransformationMatrix::initialiseToPrim\n");
 
     // if not yet initialized, do not execute this code! (It will crash!).
@@ -1115,6 +1150,9 @@ void TransformationMatrix::initialiseToPrim(bool readFromPrim, Scope* transformN
 //----------------------------------------------------------------------------------------------------------------------
 void TransformationMatrix::updateToTime(const UsdTimeCode& time)
 {
+    MProfilingScope profilerScope(
+        _transformationMatrixProfilerCategory, MProfiler::kColorE_L3, "Update to time");
+
     TF_DEBUG(ALUSDMAYA_TRANSFORM_MATRIX)
         .Msg("TransformationMatrix::updateToTime %f\n", time.GetValue());
     // if not yet initialized, do not execute this code! (It will crash!).

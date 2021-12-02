@@ -21,9 +21,8 @@
 #include <pxr/usd/usd/attribute.h>
 #include <pxr/usd/usd/pyConversions.h>
 
-#include <maya/MObject.h>
-
-#include <boost/python.hpp>
+#include <boost/python/class.hpp>
+#include <boost/python/def.hpp>
 
 using namespace boost::python;
 

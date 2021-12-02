@@ -27,6 +27,8 @@
 
 #include <maya/MGlobal.h>
 
+#include <boost/python/import.hpp>
+
 #include <map>
 #include <vector>
 
@@ -40,7 +42,7 @@ TF_DEFINE_PRIVATE_TOKENS(
     (providesTranslator)
     (UsdMaya)
     (ShadingModePlugin)
-    (ExportContextPlugin)
+    (JobContextPlugin)
 );
 // clang-format on
 
@@ -239,11 +241,11 @@ void UsdMaya_RegistryHelper::LoadShadingModePlugins()
 }
 
 /* static */
-void UsdMaya_RegistryHelper::LoadExportContextPlugins()
+void UsdMaya_RegistryHelper::LoadJobContextPlugins()
 {
-    static std::once_flag       _exportContextsLoaded;
-    static std::vector<TfToken> scope = { _tokens->UsdMaya, _tokens->ExportContextPlugin };
-    std::call_once(_exportContextsLoaded, []() {
+    static std::once_flag       _jobContextsLoaded;
+    static std::vector<TfToken> scope = { _tokens->UsdMaya, _tokens->JobContextPlugin };
+    std::call_once(_jobContextsLoaded, []() {
         PlugPluginPtrVector plugins = PlugRegistry::GetInstance().GetAllPlugins();
         std::string         mayaPlugin;
         TF_FOR_ALL(plugIter, plugins)
@@ -253,7 +255,7 @@ void UsdMaya_RegistryHelper::LoadExportContextPlugins()
                 if (!mayaPlugin.empty()) {
                     TF_DEBUG(PXRUSDMAYA_REGISTRY)
                         .Msg(
-                            "Found export context plugin %s: Loading via Maya API %s.\n",
+                            "Found job context plugin %s: Loading via Maya API %s.\n",
                             plug->GetName().c_str(),
                             mayaPlugin.c_str());
                     std::string loadPluginCmd
@@ -269,7 +271,7 @@ void UsdMaya_RegistryHelper::LoadExportContextPlugins()
                 } else {
                     TF_DEBUG(PXRUSDMAYA_REGISTRY)
                         .Msg(
-                            "Found export context plugin %s: Loading via USD API.\n",
+                            "Found job context plugin %s: Loading via USD API.\n",
                             plug->GetName().c_str());
                     plug->Load();
                 }
@@ -321,9 +323,28 @@ VtDictionary UsdMaya_RegistryHelper::GetComposedInfoDictionary(const std::vector
     return result;
 }
 
-/* static */
-void UsdMaya_RegistryHelper::AddUnloader(const std::function<void()>& func)
+// Vector of Python unloaders
+std::vector<std::function<void()>> g_pythonUnloaders;
+
+static void PythonUnload(size_t unloaderIndex)
 {
+    g_pythonUnloaders[unloaderIndex]();
+    // No destruction to keep the order, there should not be a lot of elements
+}
+
+/* static */
+void UsdMaya_RegistryHelper::AddUnloader(const std::function<void()>& func, bool fromPython)
+{
+    if (fromPython) {
+        g_pythonUnloaders.emplace_back(func);
+        if (boost::python::import("atexit")
+                .attr("register")(&PythonUnload, g_pythonUnloaders.size() - 1)
+                .is_none()) {
+            TF_CODING_ERROR("Couldn't register unloader to atexit");
+        }
+        return;
+    }
+
     if (TfRegistryManager::GetInstance().AddFunctionForUnload(func)) {
         // It is likely that the registering plugin library is opened/closed
         // by Maya and not via TfDlopen/TfDlclose. This means that the

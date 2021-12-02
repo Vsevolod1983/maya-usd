@@ -74,8 +74,10 @@ TF_DECLARE_PUBLIC_TOKENS(
     (exportSkin) \
     (exportUVs) \
     (exportVisibility) \
-    (extraContext) \
+    (jobContext) \
+    (exportComponentTags) \
     (file) \
+    (filterTypes) \
     (ignoreWarnings) \
     (kind) \
     (materialCollectionsPath) \
@@ -123,6 +125,7 @@ TF_DECLARE_PUBLIC_TOKENS(
     (apiSchema) \
     (assemblyRep) \
     (excludePrimvar) \
+    (jobContext) \
     (metadata) \
     (shadingMode) \
     (preferredMaterial) \
@@ -171,6 +174,7 @@ struct UsdMayaJobExportArgs
     const TfToken     exportSkin;
     const bool        exportBlendShapes;
     const bool        exportVisibility;
+    const bool        exportComponentTags;
     const std::string file;
     const bool        ignoreWarnings;
 
@@ -195,12 +199,13 @@ struct UsdMayaJobExportArgs
     const TfToken      renderLayerMode;
     const TfToken      rootKind;
     const TfToken      shadingMode;
-    const TfToken      convertMaterialsTo;
+    TfToken            convertMaterialsTo; // Can not be const, iteration variable.
+    const TfToken::Set allMaterialConversions;
     const bool         verbose;
     const bool         staticSingleSample;
     const TfToken      geomSidedness;
     const TfToken::Set includeAPINames;
-    const TfToken::Set includeContextNames;
+    const TfToken::Set jobContextNames;
 
     using ChaserArgs = std::map<std::string, std::string>;
     const std::vector<std::string>          chaserNames;
@@ -228,6 +233,10 @@ struct UsdMayaJobExportArgs
     // if export roots is not used.
     const PcpMapFunction rootMapFunction;
 
+    // Maya type ids to avoid exporting; these are EXACT types, the constructor will also add all
+    // inherited types (so if you exclude "constraint", it will also exclude "parentConstraint")
+    const std::set<unsigned int> filteredTypeIds;
+
     /// Creates a UsdMayaJobExportArgs from the given \p dict, overlaid on
     /// top of the default dictionary given by GetDefaultDictionary().
     /// The values of \p dict are stronger (will override) the values from the
@@ -244,19 +253,9 @@ struct UsdMayaJobExportArgs
     MAYAUSD_CORE_PUBLIC
     static const VtDictionary& GetDefaultDictionary();
 
-    /// Adds type name to filter out during export. This will also add all
-    /// inherited types (so if you exclude "constraint", it will also exclude
-    /// "parentConstraint")
-    MAYAUSD_CORE_PUBLIC
-    void AddFilteredTypeName(const MString& typeName);
-
     /// Returns the resolved file name of the final export location
     MAYAUSD_CORE_PUBLIC
     std::string GetResolvedFileName() const;
-
-    const std::set<unsigned int>& GetFilteredTypeIds() const { return _filteredTypeIds; }
-
-    void ClearFilteredTypeIds() { _filteredTypeIds.clear(); }
 
 private:
     MAYAUSD_CORE_PUBLIC
@@ -264,13 +263,6 @@ private:
         const VtDictionary&             userArgs,
         const UsdMayaUtil::MDagPathSet& dagPaths,
         const std::vector<double>&      timeSamples = std::vector<double>());
-
-    // Maya type ids to avoid exporting; these are
-    // EXACT types, though the only exposed way to modify this,
-    // AddFilteredTypeName, will also add all inherited types
-    // (so if you exclude "constraint", it will also exclude
-    // "parentConstraint")
-    std::set<unsigned int> _filteredTypeIds;
 };
 
 MAYAUSD_CORE_PUBLIC
@@ -281,6 +273,7 @@ struct UsdMayaJobImportArgs
     const TfToken      assemblyRep;
     const TfToken::Set excludePrimvarNames;
     const TfToken::Set includeAPINames;
+    const TfToken::Set jobContextNames;
     const TfToken::Set includeMetadataKeys;
     struct ShadingMode
     {

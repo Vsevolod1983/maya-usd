@@ -8,11 +8,13 @@ target_sources(${PROJECT_NAME}
         converter.cpp
         customLayerData.cpp
         diagnosticDelegate.cpp
+        editability.cpp
         query.cpp
         plugRegistryHelper.cpp
         selectability.cpp
         stageCache.cpp
-        undoHelperCommand
+        traverseLayer.cpp
+        undoHelperCommand.cpp
         util.cpp
         utilFileSystem.cpp
         utilSerialization.cpp
@@ -24,11 +26,13 @@ set(HEADERS
     customLayerData.h
     converter.h
     diagnosticDelegate.h
+    editability.h
     hash.h
     query.h
     plugRegistryHelper.h
     selectability.h
     stageCache.h
+    traverseLayer.h
     undoHelperCommand.h
     util.h
     utilFileSystem.h

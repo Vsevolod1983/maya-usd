@@ -3,16 +3,16 @@
     {
       "Info": {
         "UsdMaya": {
-          "ExportContextPlugin": {},
-          "SchemaApiWriter": {
+          "JobContextPlugin": {},
+          "SchemaApiAdaptor": {
             "providesTranslator": [
-              "mesh"
+              "shape"
             ]
           }
         }
       },
       "Name": "usdTestApiWriter",
-      "LibraryPath": "@CMAKE_CURRENT_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@usdTestApiWriter@MAYA_PLUGIN_SUFFIX@",
+      "LibraryPath": "@CMAKE_CURRENT_BINARY_DIR@/@CMAKE_SHARED_LIBRARY_PREFIX@usdTestApiWriter@CMAKE_SHARED_LIBRARY_SUFFIX@",
       "Type": "library"
     }
   ]

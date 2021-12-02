@@ -1,5 +1,3 @@
-set(TARGET_NAME IMPORT_EXPORT_TEST)
-
 set(TEST_SCRIPT_FILES
     testUsdExportAnimation.py
     testUsdExportAsClip.py
@@ -25,6 +23,7 @@ set(TEST_SCRIPT_FILES
     testUsdExportOpenLayer.py
     testUsdExportOverImport.py
     testUsdExportUsdzPackage.py
+    testUsdExportUsdPreviewSurface.py
     testUsdExportParentScope.py
     # To investigate: following test asserts in MFnParticleSystem, but passes.
     # PPT, 17-Jun-20.
@@ -49,6 +48,11 @@ set(TEST_SCRIPT_FILES
     testUsdExportVisibilityDefault.py
     testUsdImportAnonymousLayer.py
     testUsdImportCamera.py
+    testUsdImportBasisCurves.py
+    testUsdImportBatchNurbsCurves.py
+    testUsdImportLinearCurves.py
+    testUsdImportNurbsCurves.py
+    testUsdImportBatchBezierCurves.py
     testUsdImportColorSets.py
     testUsdImportDisplacement.py
     testUsdImportExportScope.py
@@ -95,15 +99,6 @@ if (BUILD_RFM_TRANSLATORS)
         testUsdImportRfMShaders.py
     )
 endif()
-
-add_custom_target(${TARGET_NAME} ALL)
-
-# copy all the resources and python scripts to build directory
-mayaUsd_copyDirectory(${TARGET_NAME}
-    SOURCE ${CMAKE_CURRENT_SOURCE_DIR}
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
-    EXCLUDE "*.txt"
-)
 
 foreach(script ${TEST_SCRIPT_FILES})
     mayaUsd_get_unittest_target(target ${script})
@@ -196,6 +191,8 @@ if (MAYA_APP_VERSION VERSION_GREATER_EQUAL 2020)
                 ENV
                     "MAYA_PLUG_IN_PATH=${CMAKE_CURRENT_BINARY_DIR}/../plugin"
                     "${PXR_OVERRIDE_PLUGINPATH_NAME}=${CMAKE_CURRENT_BINARY_DIR}/../plugin/${plugin_type}"
+                    "INPUT_PATH=${CMAKE_CURRENT_SOURCE_DIR}"
+                    "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}"
             )
             set_property(TEST ${target} APPEND PROPERTY LABELS translators)
         endforeach()
@@ -220,6 +217,14 @@ if (MAYA_APP_VERSION VERSION_GREATER 2022 AND PXR_VERSION VERSION_GREATER 2102)
         # Add a ctest label to these tests for easy filtering.
         set_property(TEST ${target} APPEND PROPERTY LABELS translators)
     endforeach()
+
+    if (BUILD_RFM_TRANSLATORS)
+        mayaUsd_add_test(testUsdExportMultiMaterial
+            PYTHON_MODULE testUsdExportMultiMaterial
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        )
+        set_property(TEST testUsdExportMultiMaterial APPEND PROPERTY LABELS translators)
+    endif()
 endif()
 
 # We are explicitly not setting PXR_PLUGINPATH_NAME here. We want to test
@@ -232,11 +237,14 @@ mayaUsd_add_test(testUsdMayaListShadingModesCommand
 )
 set_property(TEST testUsdMayaListShadingModesCommand APPEND PROPERTY LABELS translators)
 
-mayaUsd_add_test(testUsdExportSchemaApi
-    PYTHON_MODULE testUsdExportSchemaApi
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    ENV
-        "MAYA_PLUG_IN_PATH=${CMAKE_CURRENT_BINARY_DIR}/../plugin"
-        "${PXR_OVERRIDE_PLUGINPATH_NAME}=${CMAKE_CURRENT_BINARY_DIR}/../plugin/nullApiExporter"
-)
-set_property(TEST testUsdExportSchemaApi APPEND PROPERTY LABELS translators)
+# Requires Physics API to test some exporters:
+if (PXR_VERSION VERSION_GREATER 2105)
+    mayaUsd_add_test(testUsdExportSchemaApi
+        PYTHON_MODULE testUsdExportSchemaApi
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        ENV
+            "MAYA_PLUG_IN_PATH=${CMAKE_CURRENT_BINARY_DIR}/../plugin"
+            "${PXR_OVERRIDE_PLUGINPATH_NAME}=${CMAKE_CURRENT_BINARY_DIR}/../plugin/nullApiExporter"
+    )
+    set_property(TEST testUsdExportSchemaApi APPEND PROPERTY LABELS translators)
+endif()
