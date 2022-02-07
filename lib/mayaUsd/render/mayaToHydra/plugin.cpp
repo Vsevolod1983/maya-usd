@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "ProductionRender/RprUsdProductionRenderCmd.h"
+
 using MtohRenderOverridePtr = std::unique_ptr<MtohRenderOverride>;
 static std::vector<MtohRenderOverridePtr> gsRenderOverrides;
 
@@ -86,6 +88,11 @@ PLUGIN_EXPORT MStatus initializePlugin(MObject obj)
         }
     }
 
+    MStatus status = plugin.registerCommand(RprUsdProductionRenderCmd::s_commandName, RprUsdProductionRenderCmd::creator, RprUsdProductionRenderCmd::newSyntax);
+    CHECK_MSTATUS(status);
+
+    RprUsdProductionRenderCmd::RegisterRenderer();
+
     return ret;
 }
 
@@ -108,6 +115,8 @@ PLUGIN_EXPORT MStatus uninitializePlugin(MObject obj)
         ret = MS::kFailure;
         ret.perror("Error deregistering mtoh command!");
     }
+
+    plugin.deregisterCommand(RprUsdProductionRenderCmd::s_commandName);
 
     return ret;
 }

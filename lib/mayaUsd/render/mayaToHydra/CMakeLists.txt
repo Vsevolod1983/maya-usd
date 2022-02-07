@@ -16,6 +16,9 @@ target_sources(${TARGET_NAME}
         tokens.cpp
         utils.cpp
         viewCommand.cpp
+	ProductionRender/RenderProgressBars.cpp
+	ProductionRender/RprUsdProductionRender.cpp
+	ProductionRender/RprUsdProductionRenderCmd.cpp
 )
 
 set(HEADERS
