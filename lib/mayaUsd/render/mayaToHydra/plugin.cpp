@@ -90,6 +90,8 @@ PLUGIN_EXPORT MStatus initializePlugin(MObject obj)
         }
     }
 
+    MStatus status = plugin.registerCommand(RprUsdProductionRenderCmd::s_commandName, RprUsdProductionRenderCmd::creator, RprUsdProductionRenderCmd::newSyntax);
+    CHECK_MSTATUS(status);
     RprUsdProductionRenderCmd::Initialize();
 
     return ret;
