@@ -68,6 +68,8 @@ PLUGIN_EXPORT MStatus initializePlugin(MObject obj)
     snprintf(envVarData.data(), envVarSize, "%s", envVarSet);
     putenv(envVarData.data());
 
+    RprUsdProductionRenderCmd::RegisterEnvVariables();
+
     MFnPlugin plugin(obj, "Autodesk", TOSTRING(MAYAUSD_VERSION), "Any");
 
     if (!plugin.registerCommand(
@@ -88,10 +90,7 @@ PLUGIN_EXPORT MStatus initializePlugin(MObject obj)
         }
     }
 
-    MStatus status = plugin.registerCommand(RprUsdProductionRenderCmd::s_commandName, RprUsdProductionRenderCmd::creator, RprUsdProductionRenderCmd::newSyntax);
-    CHECK_MSTATUS(status);
-
-    RprUsdProductionRenderCmd::RegisterRenderer();
+    RprUsdProductionRenderCmd::Initialize();
 
     return ret;
 }

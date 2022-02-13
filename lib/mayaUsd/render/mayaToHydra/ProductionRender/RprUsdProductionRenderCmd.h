@@ -53,7 +53,11 @@ public:
 	/** Clean up before plug-in shutdown. */
 	static void cleanUp();
 
-	static void RegisterRenderer();
+	static void Initialize();
+
+	static void RegisterEnvVariables();
+
+	static void Uninitialize();
 
 public:
 	static MString s_commandName;

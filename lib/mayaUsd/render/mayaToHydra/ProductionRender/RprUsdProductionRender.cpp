@@ -1,5 +1,6 @@
 #include "RprUsdProductionRender.h" 
-
+#include "ProductionSettings.h"
+#include "common.h"
 
 #include "maya/MGlobal.h"
 #include "maya/MDagPath.h"
@@ -36,6 +37,8 @@
 
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+TfToken RprUsdProductionRender::_rendererName;
 
 RprUsdProductionRender::RprUsdProductionRender() :
 	 _renderIsStarted(false)
@@ -122,7 +125,6 @@ MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int hei
 {
 	StopRender();
 
-	_rendererName = TfToken("HdRprPlugin");
 	_ID = SdfPath("/HdMayaViewportRenderer")
 		.AppendChild(
 			TfToken(TfStringPrintf("_HdMaya_%s_%p", _rendererName.GetText(), this)));
@@ -141,6 +143,8 @@ MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int hei
 
 	MRenderView::startRender(width, height, false, true);
 	_renderProgressBars = std::make_unique<RenderProgressBars>(false);
+
+	ApplySettings();
 	Render();
 
 	const float REFRESH_RATE = 1.0f;
@@ -148,6 +152,11 @@ MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int hei
 	_callbackTimerId = MTimerMessage::addTimerCallback(REFRESH_RATE, RPRMainThreadTimerEventCallback, this, &status);
 
 	return MStatus::kSuccess;
+}
+
+void RprUsdProductionRender::ApplySettings()
+{
+	ProductionSettings::ApplySettings(_GetRenderDelegate());
 }
 
 void RprUsdProductionRender::StopRender()
@@ -455,6 +464,87 @@ MStatus RprUsdProductionRender::Render()
 	}
 
 	return MStatus::kSuccess;
+}
+
+void RprUsdProductionRender::Initialize()
+{
+	_rendererName = TfToken(GetRendererName());
+
+	std::string controlCreationCmds;
+
+	ProductionSettings::RegisterCallbacks();
+	controlCreationCmds = ProductionSettings::CreateAttributes();
+
+	RprUsdProductionRender::RegisterRenderer(controlCreationCmds);
+}
+
+void RprUsdProductionRender::Uninitialize()
+{
+	ProductionSettings::UnregisterCallbacks();
+}
+
+void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreationCmds)
+{
+	constexpr auto registerCmd =
+		R"mel(global proc registerRprUsdRenderer()
+	{
+		string $currentRendererName = "hdRPR";
+
+		renderer - rendererUIName $currentRendererName
+			- renderProcedure "rprUsdRenderCmd"
+
+			//-logoImageName              "amd.xpm"
+			rprUsdRender;
+
+		renderer - edit - addGlobalsNode "RprUsdGlobals" rprUsdRender;
+		renderer - edit - addGlobalsNode "defaultRenderGlobals" rprUsdRender;
+		renderer - edit - addGlobalsNode "defaultResolution" rprUsdRender;
+
+		renderer - edit - addGlobalsTab "Common" "createMayaSoftwareCommonGlobalsTab" "updateMayaSoftwareCommonGlobalsTab" rprUsdRender;
+		renderer - edit - addGlobalsTab "General" "createRprUsdRenderGeneralTab" "updateRprUsdRenderGeneralTab" rprUsdRender;
+	}
+
+	global proc string rprUsdRenderCmd(int $resolution0, int $resolution1,
+		int $doShadows, int $doGlowPass, string $camera, string $option)
+	{
+		print("hdRPR command " + $resolution0 + " " + $resolution1 + " " + $doShadows + " " + $doGlowPass + " " + $camera + " " + $option + "\n");
+		string $cmd = "rprUsdRender -w " + $resolution0 + " -h " + $resolution1 + " -cam " + $camera + " " + $option;
+		eval($cmd);
+		string $result = "";
+		return $result;
+	}
+
+	global proc createRprUsdRenderGeneralTab()
+	{
+		string $parentForm = `setParent -query`;
+
+		scrollLayout -w 375 -horizontalScrollBarThickness 0 rprmayausd_scrollLayout;
+		columnLayout -w 375 -adjustableColumn true rprmayausd_tabcolumn;
+
+		{CONTROLS_CREATION_CMDS}
+
+		formLayout
+			-edit
+			-af rprmayausd_scrollLayout "top" 0
+			-af rprmayausd_scrollLayout "bottom" 0
+			-af rprmayausd_scrollLayout "left" 0
+			-af rprmayausd_scrollLayout "right" 0
+			$parentForm;
+	}
+
+	global proc updateRprUsdRenderGeneralTab()
+	{
+
+	}
+
+	registerRprUsdRenderer();
+)mel";
+
+	std::string registerRenderCmd = TfStringReplace(registerCmd, "{CONTROLS_CREATION_CMDS}", controlCreationCmds);
+
+	MString mstringCmd(registerRenderCmd.c_str());
+	MStatus status = MGlobal::executeCommand(mstringCmd);
+	CHECK_MSTATUS(status);
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

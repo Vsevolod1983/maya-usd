@@ -34,9 +34,14 @@ public:
 	MStatus StartRender(unsigned int width, unsigned int height, MString newLayerName, MDagPath cameraPath);
 	void StopRender();
 
+	static void Initialize();
+	static void Uninitialize();
+
 private:
 	bool InitHydraResources();
 	void ClearHydraResources();
+
+	void ApplySettings();
 	MStatus Render();
 
 	HdRenderDelegate* _GetRenderDelegate();
@@ -45,6 +50,8 @@ private:
 
 	static void RPRMainThreadTimerEventCallback(float, float, void * pClientData);
 	void ProcessTimerMessage();
+
+	static void RegisterRenderer(const std::string& controlCreationCmds);
 
 private:
 	bool _renderIsStarted;
@@ -80,7 +87,7 @@ private:
 	};
 
 
-	TfToken _rendererName;
+	static TfToken _rendererName;
 	SdfPath _ID;
 
 	std::vector<HdMayaDelegatePtr> _delegates;

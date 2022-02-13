@@ -32,6 +32,8 @@
 
 #include <pxr/base/tf/debug.h>
 
+#include <ShlObj.h>
+
 #include <memory>
 
 //#include "tokens.h"
@@ -162,64 +164,30 @@ void RprUsdProductionRenderCmd::cleanUp()
 	s_productionRender.reset();
 }
 
-void RprUsdProductionRenderCmd::RegisterRenderer()
+
+void RprUsdProductionRenderCmd::RegisterEnvVariables()
 {
-	constexpr auto registerCmd = 
-	R"mel(global proc registerRprUsdRenderer()
+	// setup shader cache folder for hdRPR to avoid "access denied" problem if try to write to the default folder
+
+	PWSTR sz = nullptr;
+	if (S_OK == ::SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &sz))
 	{
-		string $currentRendererName = "hdRPR";
+		std::wstring cacheFolder(sz);
 
-		renderer - rendererUIName $currentRendererName
-			- renderProcedure "rprUsdRenderCmd"
+		cacheFolder += L"\\RadeonProRender\\Maya\\USD";
 
-			//-logoImageName              "amd.xpm"
-			rprUsdRender;
-
-		renderer - edit - addGlobalsNode "RprUsdGlobals" rprUsdRender;
-		renderer - edit - addGlobalsNode "defaultRenderGlobals" rprUsdRender;
-		renderer - edit - addGlobalsNode "defaultResolution" rprUsdRender;
-
-		renderer - edit - addGlobalsTab "Common" "createMayaSoftwareCommonGlobalsTab" "updateMayaSoftwareCommonGlobalsTab" rprUsdRender;
-		renderer - edit - addGlobalsTab "General" "createRprUsdRenderGeneralTab" "updateRprUsdRenderGeneralTab" rprUsdRender;
+		_wputenv(((L"HDRPR_CACHE_PATH_OVERRIDE=") + cacheFolder).c_str());
 	}
-
-	global proc string rprUsdRenderCmd(int $resolution0, int $resolution1,
-		int $doShadows, int $doGlowPass, string $camera, string $option)
-	{
-		print("hdRPR command " + $resolution0 + " " + $resolution1 + " " + $doShadows + " " + $doGlowPass + " " + $camera + " " + $option + "\n");
-		string $cmd = "rprUsdRender -w " + $resolution0 + " -h " + $resolution1 + " -cam " + $camera + " " + $option;
-		eval($cmd);
-		string $result = "";
-		return $result;
-	}
-
-	global proc createRprUsdRenderGeneralTab()
-	{
-		scrollLayout
-			- horizontalScrollBarThickness 0
-			scrollLayout;
-
-		columnLayout
-			- adjustableColumn true
-			generalTabColumn;
-
-		text - label "Put controls here 1!";
-		text - label "Put controls here 2!";
-		text - label "Put controls here 3!";
-		text - label "Put controls here 4!";
-	}
-
-	global proc updateRprUsdRenderGeneralTab()
-	{
-
-	}
-
-	registerRprUsdRenderer();
-)mel";
-	MString mstringCmd(registerCmd);
-	MStatus status = MGlobal::executeCommand(mstringCmd);
-	CHECK_MSTATUS(status);
 }
 
+void RprUsdProductionRenderCmd::Initialize()
+{
+	RprUsdProductionRender::Initialize();
+}
+
+void RprUsdProductionRenderCmd::Uninitialize()
+{
+	RprUsdProductionRender::Uninitialize();
+}
 
 PXR_NAMESPACE_CLOSE_SCOPE
