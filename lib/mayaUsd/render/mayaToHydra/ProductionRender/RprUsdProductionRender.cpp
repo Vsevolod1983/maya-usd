@@ -9,6 +9,7 @@
 #include "maya/MFnTransform.h"
 #include "maya/MRenderView.h"
 #include "maya/MTimerMessage.h"
+#include <maya/MCommonRenderSettingsData.h>
 
 #include <pxr/base/gf/matrix4d.h>
 #include <pxr/base/tf/instantiateSingleton.h>
@@ -169,13 +170,13 @@ void RprUsdProductionRender::StopRender()
 	// call abort render somehow
 
 	RefreshRenderView();
+	SaveToFile();
 	_renderProgressBars.reset();
 
 	MRenderView::endRender();
 
 	HdRenderDelegate* renderDelegate = _renderIndex->GetRenderDelegate();
 	renderDelegate->Stop();
-
 
 
 	// unregsiter timer callback
@@ -186,6 +187,48 @@ void RprUsdProductionRender::StopRender()
 
 	ClearHydraResources();
 	_renderIsStarted = false;
+}
+
+void RprUsdProductionRender::SaveToFile()
+{
+	MCommonRenderSettingsData settings;
+	MRenderUtil::getCommonRenderSettings(settings);
+
+	MString sceneName = settings.name;
+
+	// Populate the scene name with the current namespace - this
+	// should be equivalent to the scene name and is how Maya generates
+	// it for post render operations such as layered PSD creation.
+	if (sceneName.length() <= 0)
+	{
+		MStringArray results;
+		MGlobal::executeCommand("file -q -ns", results);
+
+		if (results.length() > 0)
+			sceneName = results[0];
+	}
+
+	MString cameraName = MFnDagNode(_camPath.transform()).name();
+	unsigned int frame = static_cast<unsigned int>(MAnimControl::currentTime().value());
+
+	MString fullPath = settings.getImageName(MCommonRenderSettingsData::kFullPathImage, frame,
+		sceneName, cameraName, "", MFnRenderLayer::currentLayer());
+
+	int dotIndex = fullPath.rindex('.');
+
+	if (dotIndex > 0)
+	{
+		fullPath = fullPath.substring(0, dotIndex - 1);
+	}
+
+	std::string cmd = TfStringPrintf("$editor = `renderWindowEditor -q -editorName`; renderWindowEditor -e -writeImage \"%s\" $editor", fullPath.asChar());
+
+	MStatus status = MGlobal::executeCommand(cmd.c_str());
+
+	if (status != MStatus::kSuccess)
+	{
+		MGlobal::displayError("[hdRPR] Render image could not be saved!");
+	}
 }
 
 void RprUsdProductionRender::RefreshRenderView()

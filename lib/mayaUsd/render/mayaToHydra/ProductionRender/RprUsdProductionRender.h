@@ -44,6 +44,8 @@ private:
 	void ApplySettings();
 	MStatus Render();
 
+	void SaveToFile();
+
 	HdRenderDelegate* _GetRenderDelegate();
 
 	void RefreshRenderView();
