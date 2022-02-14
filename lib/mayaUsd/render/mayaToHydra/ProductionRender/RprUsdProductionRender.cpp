@@ -214,6 +214,9 @@ void RprUsdProductionRender::SaveToFile()
 	MString fullPath = settings.getImageName(MCommonRenderSettingsData::kFullPathImage, frame,
 		sceneName, cameraName, "", MFnRenderLayer::currentLayer());
 
+	// remove existing file to avoid file replace confirmation prompt
+	MGlobal::executeCommand("sysFile -delete \"" + fullPath + "\"");
+
 	int dotIndex = fullPath.rindex('.');
 
 	if (dotIndex > 0)
