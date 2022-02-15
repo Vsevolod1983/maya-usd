@@ -46,7 +46,6 @@ RprUsdProductionRender::RprUsdProductionRender() :
 	, _initialized(false)
 	, _hasDefaultLighting(false)
 	, _isConverged(false)
-	, _globals(MtohRenderGlobals::GetInstance())
 	, _hgi(Hgi::CreatePlatformDefaultHgi())
 	, _hgiDriver{ HgiTokens->renderDriver, VtValue(_hgi.get()) }
 {
@@ -257,9 +256,6 @@ void RprUsdProductionRender::RefreshRenderView()
 
 bool RprUsdProductionRender::InitHydraResources()
 {
-	//	TF_DEBUG(HDMAYA_RENDEROVERRIDE_RESOURCES)
-	//		.Msg("MtohRenderOverride::_InitHydraResources(%s)\n", _rendererDesc.rendererName.GetText());
-
 #if PXR_VERSION < 2102
 	GlfGlewInit();
 #endif
@@ -317,27 +313,12 @@ bool RprUsdProductionRender::InitHydraResources()
 			= _ID.AppendChild(TfToken(TfStringPrintf("_DefaultLightDelegate_%p", this)));
 		_defaultLightDelegate.reset(new MtohDefaultLightDelegate(delegateInitData));
 	}
-	//VtValue selectionTrackerValue(_selectionTracker);
-	//_engine.SetTaskContextData(HdxTokens->selectionState, selectionTrackerValue);
+
 	for (auto& it : _delegates) {
 		it->Populate();
 	}
 	if (_defaultLightDelegate) {
 		_defaultLightDelegate->Populate();
-	}
-
-	//_renderIndex->GetChangeTracker().AddCollection(_selectionCollection.GetName());
-	//_SelectionChanged();
-
-	if (auto* renderDelegate = _GetRenderDelegate()) {
-		// Pull in any options that may have changed due file-open.
-		// If the currentScene has defaultRenderGlobals we'll absorb those new settings,
-		// but if not, fallback to user-defaults (current state) .
-		const bool filterRenderer = true;
-		const bool fallbackToUserDefaults = true;
-		//_globals.GlobalChanged(
-		//	{ _rendererName, filterRenderer, fallbackToUserDefaults });
-		_globals.ApplySettings(renderDelegate, _rendererName);
 	}
 
 	_initialized = true;
@@ -398,32 +379,9 @@ MStatus RprUsdProductionRender::Render()
 
 	GLUniformBufferBindingsSaver bindingsSaver;
 
-	//_SelectionChanged();
-
-	HdMayaParams delegateParams = _globals.delegateParams;
-	/*const auto   displayStyle = drawContext.getDisplayStyle();
-
-	delegateParams.displaySmoothMeshes = !(displayStyle & MHWRender::MFrameContext::kFlatShaded);
-
-	if (_defaultLightDelegate != nullptr) {
-		_defaultLightDelegate->SetDefaultLight(_defaultLight);
-	}
-	for (auto& it : _delegates) {
-		it->SetParams(delegateParams);
-		it->PreFrame(drawContext);
-	}*/
-
 	HdxRenderTaskParams params;
 	params.enableLighting = true;
 	params.enableSceneMaterials = true;
-	//= !(drawContext.getDisplayStyle() & MHWRender::MFrameContext::kDefaultMaterial);
-
-
-// TODO: separate color for normal wireframe / selected
-//MColor colour = M3dView::leadColor();
-//params.wireframeColor = GfVec4f(colour.r, colour.g, colour.b, 1.0f);
-
-//params.cullStyle = HdCullStyleBackUnlessDoubleSided;
 
 	_taskController->SetRenderViewport(_viewport);
 
@@ -446,59 +404,12 @@ MStatus RprUsdProductionRender::Render()
 		GetGfMatrixFromMaya(viewMatrix.inverse()),
 		GetGfMatrixFromMaya(projMatrix));
 
-	if (delegateParams.motionSamplesEnabled()) {
-		MStatus  status;
-
-		if (status == MStatus::kSuccess) {
-#ifdef MAYA_CURRENT_UFE_CAMERA_SUPPORT
-			MString   ufeCameraPathString = getFrameContext()->getCurrentUfeCameraPath(&status);
-			Ufe::Path ufeCameraPath = Ufe::PathString::path(ufeCameraPathString.c_str());
-			bool      isUsdCamera = ufeCameraPath.runTimeId() == MayaUsd::ufe::getUsdRunTimeId();
-#else
-			static const MString defaultUfeProxyCameraShape(
-				"|defaultUfeProxyCameraTransformParent|defaultUfeProxyCameraTransform|"
-				"defaultUfeProxyCameraShape");
-			bool isUsdCamera = defaultUfeProxyCameraShape == _camPath.fullPathName();
-#endif
-			if (!isUsdCamera) {
-				for (auto& delegate : _delegates) {
-					if (HdMayaSceneDelegate* mayaScene
-						= dynamic_cast<HdMayaSceneDelegate*>(delegate.get())) {
-						params.camera = mayaScene->SetCameraViewport(_camPath, _viewport);
-
-						break;
-					}
-				}
-			}
-		}
-		else {
-			TF_WARN(
-				"MFrameContext::getCurrentCameraPath failure (%d): '%s'"
-				"\nUsing viewport matrices.",
-				int(status.statusCode()),
-				status.errorString().asChar());
-		}
-	}
-
 	_taskController->SetRenderParams(params);
 	if (!params.camera.IsEmpty())
 		_taskController->SetCameraPath(params.camera);
 
 	// Default color in usdview.
-	//_taskController->SetSelectionColor(_globals.colorSelectionHighlightColor);
 	_taskController->SetEnableSelection(false);
-
-#if PXR_VERSION >= 2005
-	/*if (_globals.outlineSelectionWidth != 0.f) {
-		_taskController->SetSelectionOutlineRadius(_globals.outlineSelectionWidth);
-		_taskController->SetSelectionEnableOutline(true);
-	}
-	else
-		_taskController->SetSelectionEnableOutline(false);*/
-#endif
-#if PXR_VERSION <= 2005
-	_taskController->SetColorizeQuantizationEnabled(_globals.enableColorQuantization);
-#endif
 
 	_taskController->SetCollection(_renderCollection);
 	

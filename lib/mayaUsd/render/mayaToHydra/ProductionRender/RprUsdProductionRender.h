@@ -73,7 +73,7 @@ private:
 
 	std::unique_ptr<RenderProgressBars> _renderProgressBars;
 
-	const MtohRenderGlobals& _globals;
+	//const MtohRenderGlobals& _globals;
 
 	HdRprimCollection _renderCollection
 	{
