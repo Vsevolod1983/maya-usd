@@ -18,6 +18,8 @@
 #define kWidthFlagLong "-width"
 #define kHeightFlag "-h"
 #define kHeightFlagLong "-height"
+#define kWaitForItTwoStep "-wft"
+#define kWaitForItTwoStepLong "-waitForItTwo"
 
 //#define kProductionIsRunningFlag "-ifr"
 //#define kProductionIsRunningFlagLong "-isProductionRunning"
@@ -64,6 +66,15 @@ public:
 
 private:
 	static std::unique_ptr<RprUsdProductionRender> s_productionRender;
+
+	
+ /* Set in case we need to wait for single frame render to be finish,
+ * and we still want to use the built in render function call hierarchy
+ * (for ep.: renderIntoNewWindow)
+ * so wait for it flag and actual rendering is in two separate calls.
+ */
+	static bool s_waitForIt;
+
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

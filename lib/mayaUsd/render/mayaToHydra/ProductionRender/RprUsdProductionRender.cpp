@@ -2,13 +2,13 @@
 #include "ProductionSettings.h"
 #include "common.h"
 
-#include "maya/MGlobal.h"
-#include "maya/MDagPath.h"
-#include "maya/MFnCamera.h"
-#include "maya/MFnRenderLayer.h"
-#include "maya/MFnTransform.h"
-#include "maya/MRenderView.h"
-#include "maya/MTimerMessage.h"
+#include <maya/MGlobal.h>
+#include <maya/MDagPath.h>
+#include <maya/MFnCamera.h>
+#include <maya/MFnRenderLayer.h>
+#include <maya/MFnTransform.h>
+#include <maya/MRenderView.h>
+#include <maya/MTimerMessage.h>
 #include <maya/MCommonRenderSettingsData.h>
 
 #include <pxr/base/gf/matrix4d.h>
@@ -33,9 +33,7 @@
 #include <mayaUsd/utils/hash.h>
 
 #include <pxr/base/tf/debug.h>
-//#include "tokens.h"
-//#include "utils.h"
-
+#include <thread>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -100,28 +98,30 @@ void RprUsdProductionRender::RPRMainThreadTimerEventCallback(float, float, void*
 
 void RprUsdProductionRender::ProcessTimerMessage()
 {
+	HdRenderDelegate* renderDelegate = _renderIndex->GetRenderDelegate();
+	VtDictionary dict = renderDelegate->GetRenderStats();
+	double percentDone = dict.find("percentDone")->second.Get<double>();
+	_renderProgressBars->update((int)percentDone);
+
+	RefreshAndCheck();
+}
+
+bool RprUsdProductionRender::RefreshAndCheck()
+{
 	RefreshRenderView();
 
 	HdRenderBuffer* bufferPtr = _taskController->GetRenderOutput(HdAovTokens->color);
 
-	HdRenderDelegate* renderDelegate = _renderIndex->GetRenderDelegate();
-
-	VtDictionary dict = renderDelegate->GetRenderStats();
-
-	double percentDone = dict.find("percentDone")->second.Get<double>();
-	_renderProgressBars->update((int)percentDone);
-
-	if (bufferPtr->IsConverged())
+	if (bufferPtr->IsConverged() || (_renderProgressBars && _renderProgressBars->isCancelled()))
 	{
 		StopRender();
+		return false;
 	}
-	else if (_renderProgressBars->isCancelled())
-	{
-		StopRender();
-	}
+
+	return true;
 }
 
-MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int height, MString newLayerName, MDagPath cameraPath)
+MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int height, MString newLayerName, MDagPath cameraPath, bool synchronousRender)
 {
 	StopRender();
 
@@ -142,16 +142,37 @@ MStatus RprUsdProductionRender::StartRender(unsigned int width, unsigned int hei
 	}
 
 	MRenderView::startRender(width, height, false, true);
-	_renderProgressBars = std::make_unique<RenderProgressBars>(false);
+
+	if (!synchronousRender)
+	{
+		_renderProgressBars = std::make_unique<RenderProgressBars>(false);
+	}
 
 	ApplySettings();
 	Render();
 
 	const float REFRESH_RATE = 1.0f;
-	MStatus status;
-	_callbackTimerId = MTimerMessage::addTimerCallback(REFRESH_RATE, RPRMainThreadTimerEventCallback, this, &status);
+
+	if (!synchronousRender)
+	{
+		MStatus status;
+		_callbackTimerId = MTimerMessage::addTimerCallback(REFRESH_RATE, RPRMainThreadTimerEventCallback, this, &status);
+	}
+	else
+	{
+		ProcessSyncRender(REFRESH_RATE);
+	}
 
 	return MStatus::kSuccess;
+}
+
+void RprUsdProductionRender::ProcessSyncRender(float refreshRate)
+{
+	do
+	{
+		std::chrono::duration<float, std::ratio<1>> time(refreshRate);
+		std::this_thread::sleep_for(time);
+	} while (RefreshAndCheck());
 }
 
 void RprUsdProductionRender::ApplySettings()

@@ -44,6 +44,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 MString RprUsdProductionRenderCmd::s_commandName = "rprUsdRender";
 std::unique_ptr<RprUsdProductionRender> RprUsdProductionRenderCmd::s_productionRender;
+bool RprUsdProductionRenderCmd::s_waitForIt = false;
 
 RprUsdProductionRenderCmd::RprUsdProductionRenderCmd()
 {
@@ -66,6 +67,8 @@ MSyntax RprUsdProductionRenderCmd::newSyntax()
 	CHECK_MSTATUS(syntax.addFlag(kRenderLayerFlag, kRenderLayerFlagLong, MSyntax::kString));
 	CHECK_MSTATUS(syntax.addFlag(kWidthFlag, kWidthFlagLong, MSyntax::kLong));
 	CHECK_MSTATUS(syntax.addFlag(kHeightFlag, kHeightFlagLong, MSyntax::kLong));
+
+	CHECK_MSTATUS(syntax.addFlag(kWaitForItTwoStep, kWaitForItTwoStepLong, MSyntax::kNoArg));
 
 	return syntax;
 }
@@ -125,6 +128,11 @@ MStatus RprUsdProductionRenderCmd::doIt(const MArgList & args)
 	// Parse arguments.
 	MArgDatabase argData(syntax(), args);
 
+	if (argData.isFlagSet(kWaitForItTwoStep) || argData.isFlagSet(kWaitForItTwoStepLong)) {
+		s_waitForIt = true;
+		return MS::kSuccess;
+	}
+
 	unsigned int width;
 	unsigned int height;
 
@@ -154,7 +162,10 @@ MStatus RprUsdProductionRenderCmd::doIt(const MArgList & args)
 		s_productionRender = std::make_unique<RprUsdProductionRender>();
 	}
 
-	return s_productionRender->StartRender(width, height, newLayerName, camPath);
+	status = s_productionRender->StartRender(width, height, newLayerName, camPath, s_waitForIt);
+	s_waitForIt = false;
+
+	return status;
 }
 
 // Static Methods

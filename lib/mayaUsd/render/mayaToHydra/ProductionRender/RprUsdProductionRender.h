@@ -31,7 +31,7 @@ public:
 	RprUsdProductionRender();
 	~RprUsdProductionRender();
 
-	MStatus StartRender(unsigned int width, unsigned int height, MString newLayerName, MDagPath cameraPath);
+	MStatus StartRender(unsigned int width, unsigned int height, MString newLayerName, MDagPath cameraPath, bool synchronousRender);
 	void StopRender();
 
 	static void Initialize();
@@ -50,8 +50,12 @@ private:
 
 	void RefreshRenderView();
 
+	bool RefreshAndCheck();
+
 	static void RPRMainThreadTimerEventCallback(float, float, void * pClientData);
 	void ProcessTimerMessage();
+
+	void ProcessSyncRender(float refreshRate);
 
 	static void RegisterRenderer(const std::string& controlCreationCmds);
 
