@@ -77,8 +77,6 @@ private:
 
 	std::unique_ptr<RenderProgressBars> _renderProgressBars;
 
-	//const MtohRenderGlobals& _globals;
-
 	HdRprimCollection _renderCollection
 	{
 		HdTokens->geometry,
@@ -97,7 +95,6 @@ private:
 	SdfPath _ID;
 
 	std::vector<HdMayaDelegatePtr> _delegates;
-	//MtohRendererDescription _rendererDesc;
 
 	HgiUniquePtr                              _hgi;
 	HdDriver                                  _hgiDriver;

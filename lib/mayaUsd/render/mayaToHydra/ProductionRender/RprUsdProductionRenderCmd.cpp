@@ -148,8 +148,6 @@ MStatus RprUsdProductionRenderCmd::doIt(const MArgList & args)
 	if (status != MS::kSuccess)
 		return status;
 
-	//_rendererDesc = 
-
 	MString newLayerName;
 
 	if (argData.isFlagSet(kRenderLayerFlag))

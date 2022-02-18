@@ -2,7 +2,6 @@
 #include "common.h"
 
 #include "pxr/usd/usdRender/settings.h"
-//#include "utils.h"
 
 #include <pxr/imaging/hd/rendererPlugin.h>
 #include <pxr/imaging/hd/rendererPluginRegistry.h>
@@ -413,9 +412,7 @@ bool _GetAttribute(
         return false;
     }
     _GetFromPlug<T>(plug, out);
-    if (storeUserSetting) {
-        //_SetOptionVar(attrName, out);
-    }
+
     return true;
 }
 
@@ -437,8 +434,6 @@ void _GetColorAttribute(
     if (alphaOp) {
         // if alphaOp is provided, it is responsible for storing the settings
         alphaOp(out, storeUserSetting);
-    } else {
-        //_SetColorOptionVar(attrName, out);
     }
 }
 
@@ -460,9 +455,6 @@ void _GetColorAttribute(
             out[1] = color3[1];
             out[2] = color3[2];
             out[3] = plugA.asFloat();
-            if (storeUserSetting) {
-                //_SetColorOptionVar(attrName, out);
-            }
         });
 }
 
@@ -647,10 +639,11 @@ void ProductionSettings::ApplySettings(HdRenderDelegate* renderDelegate)
 	MFnDependencyNode node(nodeObj);
 
 	bool storeUserSetting = false;
-	bool valueGot = true;
 
 	for (const HdRenderSettingDescriptor& attr : rendererSettingDescriptors) {
 		MString attrName = _MangleName(attr.key, g_attributePrefix).GetText();
+
+		bool valueGot = true;
 
 		VtValue vtValue;
 		if (attr.defaultValue.IsHolding<bool>()) {
