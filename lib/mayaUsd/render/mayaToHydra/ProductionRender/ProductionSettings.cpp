@@ -733,5 +733,4 @@ void ProductionSettings::UnregisterCallbacks()
 	}
 }
 
-
 PXR_NAMESPACE_CLOSE_SCOPE

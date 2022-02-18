@@ -36,9 +36,6 @@
 
 #include <memory>
 
-//#include "tokens.h"
-//#include "utils.h"
-
 
 PXR_NAMESPACE_OPEN_SCOPE
 
