@@ -10,6 +10,9 @@ target_sources(${PROJECT_NAME}
         diagnosticDelegate.cpp
         editability.cpp
         editRouter.cpp
+        loadRules.cpp
+        loadRulesText.cpp
+        loadRulesAttribute.cpp
         query.cpp
         plugRegistryHelper.cpp
         selectability.cpp
@@ -30,6 +33,7 @@ set(HEADERS
     editability.h
     editRouter.h
     hash.h
+    loadRules.h
     query.h
     plugRegistryHelper.h
     selectability.h

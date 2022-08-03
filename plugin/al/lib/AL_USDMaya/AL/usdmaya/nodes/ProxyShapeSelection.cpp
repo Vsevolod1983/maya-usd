@@ -533,20 +533,6 @@ MObject ProxyShape::makeUsdTransformChain(
         pushToPrim,
         readAnimatedValues);
 
-    // build up new lock-prim list
-    TfToken lockPropertyToken;
-    if (usdPrim.GetMetadata<TfToken>(Metadata::locked, &lockPropertyToken)) {
-        if (lockPropertyToken == Metadata::lockTransform) {
-            m_lockManager.setLocked(usdPrim.GetPath());
-        } else if (lockPropertyToken == Metadata::lockUnlocked) {
-            m_lockManager.setUnlocked(usdPrim.GetPath());
-        } else if (lockPropertyToken == Metadata::lockInherited) {
-            m_lockManager.setInherited(usdPrim.GetPath());
-        }
-    } else {
-        m_lockManager.setInherited(usdPrim.GetPath());
-    }
-
     if (resultingPath)
         *resultingPath = recordUsdPrimToMayaPath(usdPrim, node);
     else
@@ -609,8 +595,6 @@ void ProxyShape::makeUsdTransformsInternal(
         /// must always exist, and never get deleted.
         auto check = m_requiredPaths.find(prim.GetPath());
         if (check == m_requiredPaths.end()) {
-            UsdPrim prim = *it;
-
             MObject node;
             createMayaNode(
                 prim,
@@ -625,7 +609,7 @@ void ProxyShape::makeUsdTransformsInternal(
 
             TransformReference transformRef(node, reason);
             transformRef.checkIncRef(reason);
-            const SdfPath path { usdPrim.GetPath() };
+            const SdfPath path { prim.GetPath() };
             m_requiredPaths.emplace(path, transformRef);
 
             TF_DEBUG(ALUSDMAYA_SELECTION)
@@ -677,7 +661,6 @@ void ProxyShape::removeUsdTransformChain_internal(
                 modifier.reparentNode(object);
                 modifier.deleteNode(object);
             }
-            m_lockManager.setInherited(primPath);
         }
 
         parentPrim = parentPrim.GetParent();
@@ -701,8 +684,6 @@ void ProxyShape::removeUsdTransformChain(
     MObject parentTM = MObject::kNullObj;
     MObject object = MObject::kNullObj;
 
-    // ensure the transforms have been removed from the selectability and lock db's.
-    m_lockManager.setInherited(path);
     while (!parentPrim.IsEmpty()) {
         auto it = m_requiredPaths.find(parentPrim);
         if (it == m_requiredPaths.end()) {
@@ -715,10 +696,19 @@ void ProxyShape::removeUsdTransformChain(
 
                 // The Xform of the shape may have already been deleted when the shape was deleted
                 if (h.isAlive() && h.isValid()) {
-                    modifier.reparentNode(object);
-                    modifier.deleteNode(object);
-
-                    m_lockManager.setInherited(parentPrim);
+                    // Note: For some reason if deleting Maya object with MDagModifier,
+                    //       the parents of the node will also be deleted.
+                    //       The usual trick:
+                    //            modifier.reparentNode(object);
+                    //            modifier.deleteNode(object);
+                    //       that re-parent the object before deleting does not work here,
+                    //       the workaround here is to delete the node with MGlobal instead.
+                    if (MGlobal::deleteNode(object) != MStatus::kSuccess) {
+                        MString err;
+                        err.format(
+                            "Failed to delete Maya node for prim path ^1s.", parentPrim.GetText());
+                        MGlobal::displayError(err);
+                    }
                 }
             }
 
@@ -888,9 +878,7 @@ void SelectionUndoHelper::doIt()
         MGlobal::setActiveSelectionList(m_newSelection, MGlobal::kReplaceList);
     }
     m_proxy->m_pleaseIgnoreSelection = false;
-    if (!MGlobal::optionVarIntValue("AL_usdmaya_ignoreLockPrims")) {
-        m_proxy->constructLockPrims();
-    }
+    m_proxy->constructLockPrims();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -911,9 +899,7 @@ void SelectionUndoHelper::undoIt()
         MGlobal::setActiveSelectionList(m_previousSelection, MGlobal::kReplaceList);
     }
     m_proxy->m_pleaseIgnoreSelection = false;
-    if (!MGlobal::optionVarIntValue("AL_usdmaya_ignoreLockPrims")) {
-        m_proxy->constructLockPrims();
-    }
+    m_proxy->constructLockPrims();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -938,7 +924,6 @@ void ProxyShape::removeTransformRefs(
                             "TransformReference: %s\n",
                             it->first.GetText());
                     m_requiredPaths.erase(it);
-                    m_lockManager.setInherited(iter.first);
                 }
             }
 

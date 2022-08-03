@@ -11,13 +11,16 @@
 # MAYA_INCLUDE_DIRS   Path to the devkit's include directories
 # MAYA_API_VERSION    Maya version (6-8 digits)
 # MAYA_APP_VERSION    Maya app version (4 digits)
-# MAYA_LIGHTAPI_VERSION Maya light API version (1 or 2)
+# MAYA_LIGHTAPI_VERSION Maya light API version (1 or 2 or 3)
 # MAYA_HAS_DEFAULT_MATERIAL_API Presence of a default material API on MRenderItem.
 # MAYA_NEW_POINT_SNAPPING_SUPPORT Presence of point new snapping support.
 # MAYA_PREVIEW_RELEASE_VERSION Preview Release number (3 or more digits) in preview releases, 0 in official releases
 # MAYA_CURRENT_UFE_CAMERA_SUPPORT Presence of MFrameContext::getCurrentUfeCameraPath.
 # MAYA_MRENDERITEM_UFE_IDENTIFIER_SUPPORT Presence of MPxSubSceneOverride::setUfeIdentifier.
 # MAYA_UPDATE_UFE_IDENTIFIER_SUPPORT Presence of MPxSubSceneOverride::updateUfeIdentifier.
+# MAYA_ENABLE_NEW_PRIM_DELETE Enable new delete behaviour for delete command
+# MAYA_HAS_DISPLAY_STYLE_ALL_VIEWPORTS Presence of MFrameContext::getDisplayStyleOfAllViewports.
+# MAYA_ARRAY_ITERATOR_DIFFERENCE_TYPE_SUPPORT Presence of maya array iterator difference_type trait
 
 #=============================================================================
 # Copyright 2011-2012 Francisco Requena <frarees@gmail.com>
@@ -344,6 +347,12 @@ if (MAYA_OGSDEVICES_LIBRARY)
     if (HAS_LIGHTAPI_2)
         set(MAYA_LIGHTAPI_VERSION 2)
     endif()
+    # In some future Maya updates, there might also be a function to get the ambient light, very
+    # useful to implement flat shading.
+    file(STRINGS ${MAYA_OGSDEVICES_LIBRARY} HAS_LIGHTAPI_3 REGEX "AddAmbientLight")
+    if (HAS_LIGHTAPI_3)
+        set(MAYA_LIGHTAPI_VERSION 3)
+    endif()
 endif()
 message(STATUS "Using Maya Light API Version ${MAYA_LIGHTAPI_VERSION}")
 
@@ -398,6 +407,29 @@ if(MAYA_INCLUDE_DIRS AND EXISTS "${MAYA_INCLUDE_DIR}/maya/MPxSubSceneOverride.h"
     if(MAYA_HAS_API)
         set(MAYA_UPDATE_UFE_IDENTIFIER_SUPPORT TRUE CACHE INTERNAL "updateUfeIdentifiers")
         message(STATUS "Maya has updateUfeIdentifiers API")
+    endif()
+endif()
+
+set(MAYA_ENABLE_NEW_PRIM_DELETE FALSE CACHE INTERNAL "enableNewPrimDelete")
+if (MAYA_API_VERSION VERSION_GREATER_EQUAL 20230000)
+    set(MAYA_ENABLE_NEW_PRIM_DELETE TRUE CACHE INTERNAL "enableNewPrimDelete")
+endif()
+
+set(MAYA_HAS_DISPLAY_STYLE_ALL_VIEWPORTS FALSE CACHE INTERNAL "DisplayStyleOfAllViewports")
+if(MAYA_INCLUDE_DIRS AND EXISTS "${MAYA_INCLUDE_DIR}/maya/MFrameContext.h")
+    file(STRINGS ${MAYA_INCLUDE_DIR}/maya/MFrameContext.h MAYA_HAS_API REGEX "getDisplayStyleOfAllViewports")
+    if(MAYA_HAS_API)
+        set(MAYA_HAS_DISPLAY_STYLE_ALL_VIEWPORTS TRUE CACHE INTERNAL "DisplayStyleOfAllViewports")
+        message(STATUS "Maya has getDisplayStyleOfAllViewports API")
+    endif()
+endif()
+
+set(MAYA_ARRAY_ITERATOR_DIFFERENCE_TYPE_SUPPORT FALSE CACHE INTERNAL "hasArrayIteratorDifferenceType")
+if(MAYA_INCLUDE_DIRS AND EXISTS "${MAYA_INCLUDE_DIR}/maya/MArrayIteratorTemplate.h")
+    file(STRINGS ${MAYA_INCLUDE_DIR}/maya/MArrayIteratorTemplate.h MAYA_HAS_API REGEX "difference_type")
+    if(MAYA_HAS_API)
+        set(MAYA_ARRAY_ITERATOR_DIFFERENCE_TYPE_SUPPORT TRUE CACHE INTERNAL "hasArrayIteratorDifferenceType")
+        message(STATUS "Maya array iterator has difference_type trait")
     endif()
 endif()
 

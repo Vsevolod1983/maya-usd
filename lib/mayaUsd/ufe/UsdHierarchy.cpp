@@ -117,6 +117,8 @@ UsdSceneItem::Ptr UsdHierarchy::usdSceneItem() const { return fItem; }
 
 Ufe::SceneItem::Ptr UsdHierarchy::sceneItem() const { return fItem; }
 
+#if (UFE_PREVIEW_VERSION_NUM >= 4004)
+
 bool UsdHierarchy::hasChildren() const
 {
     // We have an extra logic in createUFEChildList to remap and filter
@@ -126,6 +128,31 @@ bool UsdHierarchy::hasChildren() const
     // so going after maintainability.
     return !children().empty();
 }
+
+bool UsdHierarchy::hasFilteredChildren(const ChildFilter& childFilter) const
+{
+    // We have an extra logic in createUFEChildList to remap and filter
+    // prims. Going this direction is more costly, but easier to maintain.
+    //
+    // I don't have data that proves we need to worry about performance in here,
+    // so going after maintainability.
+    return !filteredChildren(childFilter).empty();
+}
+
+#else
+
+bool UsdHierarchy::hasChildren() const
+{
+    // We have an extra logic in createUFEChildList to remap and filter
+    // prims. Going this direction is more costly, but easier to maintain.
+    //
+    // I don't have data that proves we need to worry about performance in here,
+    // so going after maintainability.
+    const bool isFilteringInactive = false;
+    return !createUFEChildList(getUSDFilteredChildren(fItem), isFilteringInactive).empty();
+}
+
+#endif
 
 Ufe::SceneItemList UsdHierarchy::children() const
 {
@@ -165,17 +192,17 @@ UsdHierarchy::createUFEChildList(const UsdPrimSiblingRange& range, bool filterIn
 #ifdef UFE_V3_FEATURES_AVAILABLE
         if (PXR_NS::PrimUpdaterManager::readPullInformation(child, dagPathStr)) {
             auto item = Ufe::Hierarchy::createItem(Ufe::PathString::path(dagPathStr));
-            if (TF_VERIFY(item)) {
+            // if we mapped to a valid object, insert it. it's possible that we got stale object
+            // so in this case simply fallback to the usual processing of items
+            if (item) {
                 children.emplace_back(item);
+                continue;
             }
-        } else {
-#endif
-            if (!filterInactive || child.IsActive()) {
-                children.emplace_back(UsdSceneItem::create(fItem->path() + child.GetName(), child));
-            }
-#ifdef UFE_V3_FEATURES_AVAILABLE
         }
 #endif
+        if (!filterInactive || child.IsActive()) {
+            children.emplace_back(UsdSceneItem::create(fItem->path() + child.GetName(), child));
+        }
     }
     return children;
 }
@@ -254,7 +281,7 @@ UsdHierarchy::insertChild(const Ufe::SceneItem::Ptr& child, const Ufe::SceneItem
 }
 
 // Create a transform.
-#if (UFE_PREVIEW_VERSION_NUM >= 3005)
+#ifdef UFE_V3_FEATURES_AVAILABLE
 Ufe::SceneItem::Ptr UsdHierarchy::createGroup(const Ufe::PathComponent& name) const
 {
     Ufe::SceneItem::Ptr createdItem = nullptr;
@@ -284,18 +311,13 @@ UsdHierarchy::createGroup(const Ufe::Selection& selection, const Ufe::PathCompon
 }
 #endif
 
-#if (UFE_PREVIEW_VERSION_NUM >= 3001)
-Ufe::InsertChildCommand::Ptr
-#else
-Ufe::UndoableCommand::Ptr
-#endif
-
-#if (UFE_PREVIEW_VERSION_NUM >= 3005)
-UsdHierarchy::createGroupCmd(const Ufe::PathComponent& name) const
+#ifdef UFE_V3_FEATURES_AVAILABLE
+Ufe::InsertChildCommand::Ptr UsdHierarchy::createGroupCmd(const Ufe::PathComponent& name) const
 {
     return UsdUndoCreateGroupCommand::create(fItem, name.string());
 }
 #else
+Ufe::UndoableCommand::Ptr
 UsdHierarchy::createGroupCmd(const Ufe::Selection& selection, const Ufe::PathComponent& name) const
 {
     return UsdUndoCreateGroupCommand::create(fItem, selection, name.string());

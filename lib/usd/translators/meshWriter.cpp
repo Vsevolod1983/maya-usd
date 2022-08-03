@@ -346,8 +346,11 @@ bool PxrUsdTranslators_MeshWriter::writeMeshAttrs(
     const UsdMayaJobExportArgs& exportArgs = _GetExportArgs();
 
     // Exporting reference object only once
-    if (usdTime.IsDefault() && exportArgs.exportReferenceObjects) {
-        UsdMayaMeshWriteUtils::exportReferenceMesh(primSchema, GetMayaObject());
+    if (usdTime.IsDefault() && exportArgs.referenceObjectMode != UsdMayaJobExportArgsTokens->none) {
+        UsdMayaMeshWriteUtils::exportReferenceMesh(
+            primSchema,
+            GetMayaObject(),
+            exportArgs.referenceObjectMode == UsdMayaJobExportArgsTokens->defaultToMesh);
     }
 
     // Write UsdSkel skeletal skinning data first, since this will
@@ -625,7 +628,12 @@ bool PxrUsdTranslators_MeshWriter::writeMeshAttrs(
     // == Write UVSets as Vec2f Primvars
     if (exportArgs.exportMeshUVs) {
         UsdMayaMeshWriteUtils::writeUVSetsAsVec2fPrimvars(
-            finalMesh, primSchema, usdTime, _GetSparseValueWriter());
+            finalMesh,
+            primSchema,
+            usdTime,
+            _GetSparseValueWriter(),
+            exportArgs.preserveUVSetNames,
+            exportArgs.remapUVSetsTo);
     }
 
     // == Gather ColorSets

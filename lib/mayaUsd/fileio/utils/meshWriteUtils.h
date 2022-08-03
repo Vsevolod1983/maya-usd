@@ -103,7 +103,7 @@ MAYAUSD_CORE_PUBLIC
 bool isMeshValid(const MDagPath& dagPath);
 
 MAYAUSD_CORE_PUBLIC
-void exportReferenceMesh(UsdGeomMesh& primSchema, MObject obj);
+void exportReferenceMesh(UsdGeomMesh& primSchema, MObject obj, bool defaultToMesh);
 
 MAYAUSD_CORE_PUBLIC
 void assignSubDivTagsToUSDPrim(
@@ -146,10 +146,12 @@ bool getMeshUVSetData(
 
 MAYAUSD_CORE_PUBLIC
 bool writeUVSetsAsVec2fPrimvars(
-    const MFnMesh&             meshFn,
-    UsdGeomMesh&               primSchema,
-    const UsdTimeCode&         usdTime,
-    UsdUtilsSparseValueWriter* valueWriter);
+    const MFnMesh&                            meshFn,
+    UsdGeomMesh&                              primSchema,
+    const UsdTimeCode&                        usdTime,
+    UsdUtilsSparseValueWriter*                valueWriter,
+    bool                                      preserveSetNames,
+    const std::map<std::string, std::string>& uvSetRemaps);
 
 MAYAUSD_CORE_PUBLIC
 void writeSubdivInterpBound(

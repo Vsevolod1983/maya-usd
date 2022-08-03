@@ -16,6 +16,11 @@
 #pragma once
 
 #include <mayaUsd/base/api.h>
+
+#include <ufe/ufe.h>
+#ifdef UFE_V2_FEATURES_AVAILABLE
+#include <mayaUsd/ufe/UsdAttribute.h>
+#endif
 #include <mayaUsd/ufe/UsdSceneItem.h>
 
 #include <pxr/base/tf/hashset.h>
@@ -125,6 +130,10 @@ Ufe::PathSegment dagPathToPathSegment(const MDagPath& dagPath);
 MAYAUSD_CORE_PUBLIC
 MDagPath ufeToDagPath(const Ufe::Path& ufePath);
 
+//! Verify if the UFE path is the Maya world (root) path.
+MAYAUSD_CORE_PUBLIC
+bool isMayaWorldPath(const Ufe::Path& ufePath);
+
 //! Return the gateway node (i.e. proxy shape)
 MAYAUSD_CORE_PUBLIC
 PXR_NS::MayaUsdProxyShapeBase* getProxyShape(const Ufe::Path& path);
@@ -147,6 +156,11 @@ bool isAttributeEditAllowed(const PXR_NS::UsdAttribute& attr, std::string* errMs
 
 MAYAUSD_CORE_PUBLIC
 bool isAttributeEditAllowed(const PXR_NS::UsdPrim& prim, const PXR_NS::TfToken& attrName);
+
+#ifdef UFE_V2_FEATURES_AVAILABLE
+MAYAUSD_CORE_PUBLIC
+Ufe::Attribute::Type usdTypeToUfe(const PXR_NS::SdfValueTypeName& usdType);
+#endif
 
 //! Check if the edit target in the stage is allowed to be changed.
 //! \return True, if the edit target layer in the stage is allowed to be changed

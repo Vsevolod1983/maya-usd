@@ -82,6 +82,27 @@ const int _proxyShapeProfilerCategory = MProfiler::addCategory(
     "AL_usdmaya_ProxyShape"
 #endif
 );
+
+//----------------------------------------------------------------------------------------------------------------------
+/// \brief Verify given Maya node is still valid.
+bool hasNode(const MFnDependencyNode& fn)
+{
+    // Note: Once the actual Maya node has been deleted from the scene,
+    //       accessing the DAG path (`.getPath()`) or user data (`.userNode()`)
+    //       would cause Maya to crash.
+    //       In this function, the validation is done via lookup its uuid.
+    auto nodeUuid = fn.uuid();
+    if (!nodeUuid.valid()) {
+        return false;
+    }
+    MStringArray result;
+    if (MGlobal::executeCommand(MString("ls \"") + nodeUuid.asString() + "\"", result)
+        != MStatus::kSuccess) {
+        return false;
+    }
+    return result.length();
+}
+
 } // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -390,6 +411,9 @@ MStatus ProxyShape::setDependentsDirty(const MPlug& plugBeingDirtied, MPlugArray
             }
         }
     }
+
+    if (plugBeingDirtied == timeAttr || plugBeingDirtied.isDynamic())
+        ParentClass::setDependentsDirty(plugBeingDirtied, plugs);
 
     if (plugBeingDirtied == time() || plugBeingDirtied == m_timeOffset
         || plugBeingDirtied == m_timeScalar) {
@@ -935,26 +959,17 @@ void ProxyShape::validateTransforms()
 {
     TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("validateTransforms\n");
     if (m_stage) {
-        SdfPathVector pathsToNuke;
         for (auto& it : m_requiredPaths) {
             TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("validateTransforms %s\n", it.first.GetText());
 
             MObject       node = it.second.node();
             MObjectHandle handle(node);
-            if (!handle.isValid() || !handle.isAlive()) {
-                continue;
-            }
-
-            if (node.isNull()) {
+            if (!handle.isValid() || !handle.isAlive() || node.isNull()) {
                 continue;
             }
 
             Scope* tm = it.second.getTransformNode();
             if (!tm) {
-                UsdPrim newPrim = m_stage->GetPrimAtPath(it.first);
-                if (!newPrim) {
-                    pathsToNuke.push_back(it.first);
-                }
                 continue;
             }
 
@@ -965,8 +980,6 @@ void ProxyShape::validateTransforms()
                 if (newPrim && transformType.empty()) {
                     tm->transform()->setPrim(newPrim, tm);
                 }
-            } else {
-                pathsToNuke.push_back(it.first);
             }
         }
     }
@@ -1047,7 +1060,8 @@ void ProxyShape::processChangedObjects(
             UsdPrim changedPrim = m_stage->GetPrimAtPath(path);
             if (path.IsPrimPropertyPath()) {
                 const std::string tokenString = path.GetElementString();
-                if (std::strncmp(tokenString.c_str(), ".xformOp", 8) == 0) {
+                if (std::strncmp(tokenString.c_str(), ".xformOp", 8) == 0
+                    || std::strncmp(tokenString.c_str(), ".visibility", 11) == 0) {
                     shouldCleanBBoxCache = true;
                     break;
                 }
@@ -1064,9 +1078,7 @@ void ProxyShape::processChangedObjects(
         // you need to reselect the proxy before the bounds will be updated).
     }
 
-    if (isLockPrimFeatureActive()) {
-        processChangedMetaData(resyncedPaths, changedOnlyPaths);
-    }
+    processChangedMetaData(resyncedPaths, changedOnlyPaths);
 
     // These paths are subtree-roots representing entire subtrees that may have
     // changed. In this case, we must dump all cached data below these points
@@ -1461,9 +1473,7 @@ void ProxyShape::loadStage()
     if (m_stage && !MFileIO::isReadingFile()) {
         // execute the post load process to import any custom prims
         cmds::ProxyShapePostLoadProcess::initialise(this);
-        if (isLockPrimFeatureActive()) {
-            findPrimsWithMetaData();
-        }
+        findPrimsWithMetaData();
     }
 
     destroyGLImagingEngine();
@@ -1482,6 +1492,10 @@ void ProxyShape::postConstructor()
     // Apply render defaults
     MPlug(thisMObject(), m_visibleInReflections).setValue(true);
     MPlug(thisMObject(), m_visibleInRefractions).setValue(true);
+
+#if MAYA_API_VERSION >= 20210000
+    enableProxyAccessor();
+#endif
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1617,8 +1631,11 @@ MStatus ProxyShape::compute(const MPlug& plug, MDataBlock& dataBlock)
     TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::compute %s\n", plug.name().asChar());
     // When shape is computed Maya will request redraw by itself
     m_requestedRedraw = true;
+    if (plug == outTimeAttr || plug.isDynamic())
+        ParentClass::compute(plug, dataBlock);
     MTime currentTime;
     if (plug == outTime()) {
+        MHWRender::MRenderer::setGeometryDrawDirty(thisMObject());
         return computeOutputTime(plug, dataBlock, currentTime);
     } else if (plug == outStageData()) {
         MStatus status = computeOutputTime(MPlug(plug.node(), outTime()), dataBlock, currentTime);
@@ -1748,7 +1765,7 @@ void ProxyShape::CacheEmptyBoundingBox(MBoundingBox& cachedBBox)
 //----------------------------------------------------------------------------------------------------------------------
 UsdTimeCode ProxyShape::GetOutputTime(MDataBlock dataBlock) const
 {
-    return UsdTimeCode(inputDoubleValue(dataBlock, outTime()));
+    return MayaUsdProxyShapeBase::GetOutputTime(dataBlock);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1803,7 +1820,7 @@ void ProxyShape::serialiseTransformRefs()
 
         if (handle.isAlive() && handle.isValid()) {
             MFnDagNode fn(handle.object(), &status);
-            if (status) {
+            if (status && hasNode(fn)) {
                 MDagPath path;
                 fn.getPath(path);
                 oss << path.fullPathName() << " " << iter.first.GetText() << " "
@@ -1901,7 +1918,7 @@ Scope* ProxyShape::TransformReference::getTransformNode() const
     if (n.isValid() && n.isAlive()) {
         MStatus           status;
         MFnDependencyNode fn(n.object(), &status);
-        if (status == MS::kSuccess) {
+        if (status == MS::kSuccess && hasNode(fn)) {
             Scope* transformNode = dynamic_cast<Scope*>(fn.userNode());
             if (transformNode) {
                 TF_DEBUG(ALUSDMAYA_EVALUATION)
@@ -1953,8 +1970,6 @@ void ProxyShape::registerEvents()
     registerEvent("PostStageLoaded", AL::event::kUSDMayaEventType);
     registerEvent("ConstructGLEngine", AL::event::kUSDMayaEventType);
     registerEvent("DestroyGLEngine", AL::event::kUSDMayaEventType);
-    registerEvent("PreSelectionChanged", AL::event::kUSDMayaEventType);
-    registerEvent("PostSelectionChanged", AL::event::kUSDMayaEventType);
     registerEvent("PreVariantChanged", AL::event::kUSDMayaEventType);
     registerEvent("PostVariantChanged", AL::event::kUSDMayaEventType);
     registerEvent("PreSerialiseContext", AL::event::kUSDMayaEventType, Global::postSave());
@@ -1966,8 +1981,6 @@ void ProxyShape::registerEvents()
     registerEvent("PreDeserialiseTransformRefs", AL::event::kUSDMayaEventType, Global::postRead());
     registerEvent("PostDeserialiseTransformRefs", AL::event::kUSDMayaEventType, Global::postRead());
     registerEvent("EditTargetChanged", AL::event::kUSDMayaEventType);
-    registerEvent("SelectionStarted", AL::event::kUSDMayaEventType);
-    registerEvent("SelectionEnded", AL::event::kUSDMayaEventType);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2088,12 +2101,89 @@ void ProxyShape::setChangedSelectionState(const bool hasSelectabilityChanged)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-AL::usdmaya::SelectabilityDB& ProxyShape::selectabilityDB() { return m_selectabilityDB; }
+template <typename CacheT>
+bool checkPrimMetadata(
+    const UsdPrim& prim,
+    const TfToken& key,
+    const TfToken& trueToken,
+    const TfToken& falseToken,
+    CacheT&        cache)
+{
+    TfHashSet<UsdPrim, boost::hash<UsdPrim>> cachedPrims;
+    auto                                     updateCache = [&cache, &cachedPrims](bool value) {
+        for (auto&& cachedPrim : cachedPrims) {
+            cache.insert(std::make_pair(cachedPrim, value));
+        }
+        return value;
+    };
+
+    auto parent(prim);
+    while (parent.IsValid() && !parent.IsPseudoRoot()) {
+        auto it = cache.find(parent);
+        if (it != cache.end()) {
+            return it->second;
+        }
+        cachedPrims.insert(parent);
+        TfToken token;
+        if (parent.GetMetadata<TfToken>(key, &token)) {
+            if (token == trueToken) {
+                return updateCache(true);
+            } else if (token == falseToken) {
+                return updateCache(false);
+            }
+        }
+        parent = parent.GetParent();
+    }
+    return updateCache(false);
+}
 
 //----------------------------------------------------------------------------------------------------------------------
-const AL::usdmaya::SelectabilityDB& ProxyShape::selectabilityDB() const
+bool ProxyShape::isPathUnselectable(const SdfPath& path) const
 {
-    return const_cast<ProxyShape*>(this)->selectabilityDB();
+    if (!m_stage) {
+        return false;
+    }
+    auto prim(m_stage->GetPrimAtPath(path));
+    if (!prim) {
+        return false;
+    }
+    UnselectablePrimCache cache;
+    return isPrimUnselectable(prim, cache);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+bool ProxyShape::isPrimUnselectable(const UsdPrim& prim, UnselectablePrimCache& cache) const
+{
+    // If global optionVar is not enabled, disable selection for all paths
+    if (MGlobal::optionVarExists("AL_usdmaya_selectionEnabled")
+        && !MGlobal::optionVarIntValue("AL_usdmaya_selectionEnabled")) {
+        // Return true to indicate the path is not selectable
+        return true;
+    }
+
+    return checkPrimMetadata(
+        prim, Metadata::selectability, Metadata::unselectable, Metadata::selectable, cache);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+bool ProxyShape::isPathLocked(const SdfPath& path) const
+{
+    if (!m_stage) {
+        return false;
+    }
+    auto prim(m_stage->GetPrimAtPath(path));
+    if (!prim) {
+        return false;
+    }
+    LockPrimCache cache;
+    return isPrimLocked(prim, cache);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+bool ProxyShape::isPrimLocked(const UsdPrim& prim, LockPrimCache& cache) const
+{
+    return checkPrimMetadata(
+        prim, Metadata::locked, Metadata::lockTransform, Metadata::lockUnlocked, cache);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

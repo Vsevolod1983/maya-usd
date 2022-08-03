@@ -313,6 +313,18 @@ public:
             &This::default_GetShadingAttributeForMayaAttrName)(mayaAttrName, typeName);
     }
 
+    void default_Write(const UsdTimeCode& usdTime) { base_t::Write(usdTime); }
+    void Write(const UsdTimeCode& usdTime) override
+    {
+        this->template CallVirtual<>("Write", &This::default_Write)(usdTime);
+    }
+
+    void default_PostExport() { base_t::PostExport(); }
+    void PostExport() override
+    {
+        this->template CallVirtual<>("PostExport", &This::default_PostExport)();
+    }
+
     //---------------------------------------------------------------------------------------------
     /// \brief  wraps a factory function that allows registering an updated Python class
     //---------------------------------------------------------------------------------------------
@@ -425,6 +437,15 @@ boost::python::object get_allChaserArgs(UsdMayaJobExportArgs& self)
     return boost::python::object(allChaserArgs);
 }
 
+boost::python::object get_remapUVSetsTo(UsdMayaJobExportArgs& self)
+{
+    boost::python::dict uvSetRemaps;
+    for (auto&& remap : self.remapUVSetsTo) {
+        uvSetRemaps[remap.first] = remap.second;
+    }
+    return boost::python::object(uvSetRemaps);
+}
+
 // This class is used to expose protected members of UsdMayaPrimWriter to Python
 class PrimWriterAllowProtected : public UsdMayaPrimWriter
 {
@@ -475,6 +496,7 @@ void wrapJobExportArgs()
             "convertMaterialsTo",
             make_getter(
                 &UsdMayaJobExportArgs::convertMaterialsTo, return_value_policy<return_by_value>()))
+        .add_property("remapUVSetsTo", ::get_remapUVSetsTo)
         //.add_property("dagPaths", requires exporting UsdMayaUtil::MDagPathSet)
         .add_property(
             "defaultMeshScheme",
@@ -493,11 +515,12 @@ void wrapJobExportArgs()
         .def_readonly("exportComponentTags", &UsdMayaJobExportArgs::exportComponentTags)
         .def_readonly("exportDefaultCameras", &UsdMayaJobExportArgs::exportDefaultCameras)
         .def_readonly("exportDisplayColor", &UsdMayaJobExportArgs::exportDisplayColor)
+        .def_readonly("exportDistanceUnit", &UsdMayaJobExportArgs::exportDistanceUnit)
         .def_readonly("exportInstances", &UsdMayaJobExportArgs::exportInstances)
         .def_readonly("exportMaterialCollections", &UsdMayaJobExportArgs::exportMaterialCollections)
         .def_readonly("exportMeshUVs", &UsdMayaJobExportArgs::exportMeshUVs)
         .def_readonly("exportNurbsExplicitUV", &UsdMayaJobExportArgs::exportNurbsExplicitUV)
-        .def_readonly("exportReferenceObjects", &UsdMayaJobExportArgs::exportReferenceObjects)
+        .def_readonly("referenceObjectMode", &UsdMayaJobExportArgs::referenceObjectMode)
         .def_readonly("exportRefsAsInstanceable", &UsdMayaJobExportArgs::exportRefsAsInstanceable)
         .add_property(
             "exportSkels",
@@ -537,6 +560,7 @@ void wrapJobExportArgs()
         .def_readonly("melPostCallback", &UsdMayaJobExportArgs::melPostCallback)
         .def_readonly("mergeTransformAndShape", &UsdMayaJobExportArgs::mergeTransformAndShape)
         .def_readonly("normalizeNurbs", &UsdMayaJobExportArgs::normalizeNurbs)
+        .def_readonly("preserveUVSetNames", &UsdMayaJobExportArgs::preserveUVSetNames)
         .add_property(
             "parentScope",
             make_getter(&UsdMayaJobExportArgs::parentScope, return_value_policy<return_by_value>()))
@@ -657,6 +681,11 @@ void wrapShaderWriter()
             "GetShadingAttributeForMayaAttrName",
             &ShaderWriterWrapper::GetShadingAttributeForMayaAttrName,
             &ShaderWriterWrapper::default_GetShadingAttributeForMayaAttrName)
+        .def("Write", &ShaderWriterWrapper::Write, &ShaderWriterWrapper::default_Write)
+        .def(
+            "PostExport",
+            &ShaderWriterWrapper::PostExport,
+            &ShaderWriterWrapper::default_PostExport)
 
         .def("Register", &ShaderWriterWrapper::Register)
         .staticmethod("Register")

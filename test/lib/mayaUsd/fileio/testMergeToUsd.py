@@ -19,7 +19,8 @@
 import fixturesUtils
 
 from mayaUtils import setMayaTranslation, setMayaRotation
-from usdUtils import createSimpleXformScene, mayaUsd_createStageWithNewLayer
+from usdUtils import createSimpleXformScene, mayaUsd_createStageWithNewLayer, createLayeredStage, createSimpleXformSceneInCurrentLayer
+from ufeUtils import ufeFeatureSetVersion
 
 import mayaUsd.lib
 
@@ -62,7 +63,7 @@ class MergeToUsdTestCase(unittest.TestCase):
     def setUp(self):
         cmds.file(new=True, force=True)
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testTransformMergeToUsd(self):
         '''Merge edits on a USD transform back to USD.'''
 
@@ -127,7 +128,7 @@ class MergeToUsdTestCase(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 om.MSelectionList().add(mayaPathStr)
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testTransformMergeToUsdUndoRedo(self):
         '''Merge edits on a USD transform back to USD and use undo redo.'''
 
@@ -158,6 +159,10 @@ class MergeToUsdTestCase(unittest.TestCase):
                 ufe.PathString.string(usdUfePath))
 
         psHier = ufe.Hierarchy.hierarchy(ps)
+
+        # Make a selection before merge edits back to USD.
+        cmds.select('persp')
+        previousSn = cmds.ls(sl=True, ufe=True, long=True)
 
         # Merge edits back to USD.
         cmds.mayaUsdMergeToUsd(aMayaPathStr)
@@ -194,6 +199,11 @@ class MergeToUsdTestCase(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     om.MSelectionList().add(mayaPathStr)
 
+            # Selection is on the restored USD object.
+            sn = cmds.ls(sl=True, ufe=True, long=True)
+            self.assertEqual(len(sn), 1)
+            self.assertEqual(sn[0], aUsdUfePathStr)
+
         verifyMergeToUsd()
 
         cmds.undo()
@@ -205,6 +215,8 @@ class MergeToUsdTestCase(unittest.TestCase):
                     om.MSelectionList().add(mayaPathStr)
                 except:
                     self.assertTrue(False, "Selecting node should not have raise an exception")
+            # Selection is restored.
+            self.assertEqual(cmds.ls(sl=True, ufe=True, long=True), previousSn)
 
         verifyMergeIsUndone()
 
@@ -212,7 +224,7 @@ class MergeToUsdTestCase(unittest.TestCase):
 
         verifyMergeToUsd()
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testMergeToUsdToNonRootTargetInSessionLayer(self):
         '''Merge edits on a USD transform back to USD targeting a non-root destination path that
            does not exists in the destination layer.'''
@@ -235,6 +247,47 @@ class MergeToUsdTestCase(unittest.TestCase):
         with mayaUsd.lib.OpUndoItemList():
             stage = mayaUsd.ufe.getStage(bUsdUfePathStr)
             stage.SetEditTarget(stage.GetSessionLayer())
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.mergeToUsd(bMayaPathStr))
+
+        # Check that edits have been preserved in USD.
+        bUsdMatrix = bXlateOp.GetOpTransform(
+            mayaUsd.ufe.getTime(bUsdUfePathStr))
+        mayaValues = [v for v in bMayaMatrix]
+        usdValues = [v for row in bUsdMatrix for v in row]
+    
+        assertVectorAlmostEqual(self, mayaValues, usdValues)
+
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
+    def testMergeToUsdToParentLayer(self):
+        '''Merge edits on a USD transform back to USD targeting a parent layer.'''
+
+        # Create a multi-layered scene with prim on the lowest layer.
+        # We should receive three layers: root and two additional sub-layers.
+        (psPathStr, psPath, ps, layers) = createLayeredStage(2)
+        self.assertEqual(3, len(layers))
+
+        stage = mayaUsd.lib.GetPrim(psPathStr).GetStage()
+        stage.SetEditTarget(layers[-1])
+
+        (aXlateOp, aXlation, aUsdUfePathStr, aUsdUfePath, aUsdItem,
+         bXlateOp, bXlation, bUsdUfePathStr, bUsdUfePath, bUsdItem) = createSimpleXformSceneInCurrentLayer(psPathStr, ps)
+
+        # To merge back to USD, we must edit as Maya first.
+        with mayaUsd.lib.OpUndoItemList():
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.editAsMaya(bUsdUfePathStr))
+
+        bMayaItem = ufe.GlobalSelection.get().front()
+        (bMayaPath, bMayaPathStr, _, bMayaMatrix) = \
+            setMayaTranslation(bMayaItem, om.MVector(10, 11, 12))
+
+        psHier = ufe.Hierarchy.hierarchy(ps)
+
+        # Before merging, set the edit target to the top non-root layer
+        stage = mayaUsd.lib.GetPrim(psPathStr).GetStage()
+        stage.SetEditTarget(layers[1])
+
+        # Merge edits back to USD.
+        with mayaUsd.lib.OpUndoItemList():
             self.assertTrue(mayaUsd.lib.PrimUpdaterManager.mergeToUsd(bMayaPathStr))
 
         # Check that edits have been preserved in USD.

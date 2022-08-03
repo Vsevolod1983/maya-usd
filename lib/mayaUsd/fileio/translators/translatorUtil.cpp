@@ -70,13 +70,14 @@ bool UsdMayaTranslatorUtil::CreateTransformNode(
 
 /* static */
 bool UsdMayaTranslatorUtil::CreateDummyTransformNode(
-    const UsdPrim&               usdPrim,
-    MObject&                     parentNode,
-    bool                         importTypeName,
-    const UsdMayaPrimReaderArgs& args,
-    UsdMayaPrimReaderContext*    context,
-    MStatus*                     status,
-    MObject*                     mayaNodeObj)
+    const UsdPrim&                  usdPrim,
+    MObject&                        parentNode,
+    bool                            importTypeName,
+    const UsdMayaPrimReaderArgs&    args,
+    UsdMayaPrimReaderContext*       context,
+    MStatus*                        status,
+    MObject*                        mayaNodeObj,
+    const UsdMayaDummyTransformType dummyTransformType)
 {
     if (!usdPrim) {
         return false;
@@ -111,6 +112,10 @@ bool UsdMayaTranslatorUtil::CreateDummyTransformNode(
             UsdMayaUtil::SetNotes(dagNode, notes);
         }
         adaptor.SetMetadata(SdfFieldKeys->TypeName, typeName);
+    }
+
+    if (dummyTransformType == UsdMayaDummyTransformType::UnlockedTransform) {
+        return true;
     }
 
     // Lock all the transform attributes.
@@ -282,6 +287,64 @@ bool UsdMayaTranslatorUtil::CreateShaderNode(
     }
 
     return true;
+}
+
+UsdMayaShadingNodeType
+UsdMayaTranslatorUtil::ComputeShadingNodeTypeForMayaTypeName(const TfToken& mayaNodeTypeName)
+{
+    // Use NonShading as a fallback.
+    UsdMayaShadingNodeType shadingNodeType = UsdMayaShadingNodeType::NonShading;
+
+    MStatus status;
+    MString cmd;
+    status = cmd.format("getClassification ^1s", mayaNodeTypeName.GetText());
+    CHECK_MSTATUS_AND_RETURN(status, shadingNodeType);
+
+    MStringArray compoundClassifications;
+    status = MGlobal::executeCommand(cmd, compoundClassifications, false, false);
+    CHECK_MSTATUS_AND_RETURN(status, shadingNodeType);
+
+    static const std::vector<std::pair<std::string, UsdMayaShadingNodeType>> _classificationsToTypes
+        = { { "texture/", UsdMayaShadingNodeType::Texture },
+            { "utility/", UsdMayaShadingNodeType::Utility },
+            { "shader/", UsdMayaShadingNodeType::Shader } };
+
+    // The docs for getClassification() are pretty confusing. You'd think that
+    // the string array returned would give you each "classification", but
+    // instead, it's a list of "single compound classification string by
+    // joining the individual classifications with ':'".
+
+    // Loop over the compoundClassifications, though I believe
+    // compoundClassifications will always have size 0 or 1.
+#if MAYA_API_VERSION >= 20190000
+    for (const MString& compoundClassification : compoundClassifications) {
+#else
+    for (unsigned int i = 0u; i < compoundClassifications.length(); ++i) {
+        const MString& compoundClassification = compoundClassifications[i];
+#endif
+        const std::string compoundClassificationStr(compoundClassification.asChar());
+        for (const std::string& classification : TfStringSplit(compoundClassificationStr, ":")) {
+            for (const auto& classPrefixAndType : _classificationsToTypes) {
+                if (TfStringStartsWith(classification, classPrefixAndType.first)) {
+                    return classPrefixAndType.second;
+                }
+            }
+        }
+    }
+
+    return shadingNodeType;
+}
+
+/* static */
+bool UsdMayaTranslatorUtil::SetUsdTypeName(const MObject& mayaNodeObj, const TfToken& usdTypeName)
+{
+    if (UsdMayaAdaptor adaptor = UsdMayaAdaptor(mayaNodeObj)) {
+        VtValue typeName;
+        typeName = usdTypeName;
+        adaptor.SetMetadata(SdfFieldKeys->TypeName, typeName);
+        return true;
+    }
+    return false;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

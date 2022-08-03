@@ -120,9 +120,23 @@ bool UsdMayaWriteJobContext::IsMergedTransform(const MDagPath& path) const
 
     // Any transform with multiple (non-intermediate) shapes below is
     // non-mergeable.
-    unsigned int numberOfShapesDirectlyBelow = 0u;
-    path.numberOfShapesDirectlyBelow(numberOfShapesDirectlyBelow);
-    if (numberOfShapesDirectlyBelow != 1) {
+    // Expanded out the implementation of MDagPath::numberOfShapesDirectlyBelow() to cut down
+    // the time by half.
+    unsigned int numShapes = 0;
+    const auto   childCount = path.childCount();
+    for (auto child = decltype(childCount) { 0 }; child < childCount; ++child) {
+        const auto dagObj = path.child(child);
+        MFnDagNode dagNode(dagObj);
+        if (dagNode.isIntermediateObject() || dagNode.isIntermediateObject()) {
+            continue;
+        }
+        if (dagObj.hasFn(MFn::kShape)) {
+            numShapes++;
+            if (numShapes > 1)
+                return false;
+        }
+    }
+    if (numShapes != 1) {
         return false;
     }
 
@@ -132,7 +146,6 @@ bool UsdMayaWriteJobContext::IsMergedTransform(const MDagPath& path) const
     // For efficiency reasons, since (# exportable children <= # children),
     // check the total child count first before checking whether they're
     // exportable.
-    const unsigned int childCount = path.childCount();
     if (childCount != 1) {
         MDagPath     childDag(path);
         unsigned int numExportableChildren = 0u;
@@ -163,13 +176,14 @@ SdfPath UsdMayaWriteJobContext::ConvertDagToUsdPath(const MDagPath& dagPath) con
         path = path.GetParentPath();
     }
 
+    path = _GetRootOverridePath(mArgs, path);
+
     if (!mParentScopePath.IsEmpty()) {
         // Since path is from MDagPathToUsdPath, it will always be
         // an absolute path...
         path = path.ReplacePrefix(SdfPath::AbsoluteRootPath(), mParentScopePath);
     }
-
-    return _GetRootOverridePath(mArgs, path);
+    return path;
 }
 
 UsdMayaWriteJobContext::_ExportAndRefPaths

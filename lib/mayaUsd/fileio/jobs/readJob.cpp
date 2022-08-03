@@ -31,6 +31,7 @@
 #include <pxr/usd/sdf/fileFormat.h>
 #include <pxr/usd/sdf/layer.h>
 #include <pxr/usd/sdf/path.h>
+#include <pxr/usd/usd/editContext.h>
 #include <pxr/usd/usd/prim.h>
 #include <pxr/usd/usd/primFlags.h>
 #include <pxr/usd/usd/primRange.h>
@@ -141,12 +142,16 @@ bool UsdMaya_ReadJob::Read(std::vector<MDagPath>* addedDagPaths)
     } else {
         UsdStageCacheContext stageCacheContext(UsdMayaStageCache::Get(
             mImportData.stageInitialLoadSet() == UsdStage::InitialLoadSet::LoadAll));
-        stage = UsdStage::Open(rootLayer, sessionLayer, mImportData.stageInitialLoadSet());
+        if (mArgs.pullImportStage)
+            stage = mArgs.pullImportStage;
+        else
+            stage = UsdStage::Open(rootLayer, sessionLayer, mImportData.stageInitialLoadSet());
     }
     if (!stage) {
         return false;
     }
 
+    UsdEditContext editContext(stage, stage->GetSessionLayer());
     stage->SetEditTarget(stage->GetSessionLayer());
     _setTimeSampleMultiplierFrom(stage->GetTimeCodesPerSecond());
 
@@ -538,7 +543,7 @@ bool UsdMaya_ReadJob::_DoImport(UsdPrimRange& rootRange, const UsdPrim& usdRootP
                         prototypeNode.removeChildAt(prototypeNode.childCount() - 1);
                     }
                 }
-#if MAYA_APP_VERSION >= 2020
+#if MAYA_API_VERSION > 20200200
                 deletePrototypeMod.deleteNode(prototypeObject, false);
 #else
                 deletePrototypeMod.deleteNode(prototypeObject);
@@ -610,7 +615,7 @@ bool UsdMaya_ReadJob::Undo()
                         }
                     }
                 }
-#if MAYA_APP_VERSION >= 2020
+#if MAYA_API_VERSION > 20200200
                 mDagModifierUndo.deleteNode(it.second, false);
 #else
                 mDagModifierUndo.deleteNode(it.second);

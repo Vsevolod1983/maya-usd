@@ -1,7 +1,6 @@
 # unit test scripts.  Note that testTRSBase.py is not a test case, but rather
 # a module providing a base class for other tests.
 set(TEST_SCRIPT_FILES
-    testDeleteCmd.py
     testMatrices.py
     testMayaPickwalk.py
     testPythonWrappers.py
@@ -48,6 +47,20 @@ if(CMAKE_UFE_V3_FEATURES_AVAILABLE)
     )
 endif()
 
+if(CMAKE_UFE_V4_FEATURES_AVAILABLE)
+    if (${UFE_PREVIEW_VERSION_NUM} GREATER_EQUAL 4007)
+        list(APPEND TEST_SCRIPT_FILES
+            testLight.py
+        )
+    endif()
+
+    if(CMAKE_WANT_MATERIALX_BUILD)
+        list(APPEND TEST_SCRIPT_FILES
+            testShaderNodeDef.py
+        )
+    endif()
+endif()
+
 if (MAYA_API_VERSION VERSION_GREATER_EQUAL 20220100)
     list(APPEND TEST_SCRIPT_FILES
         testCamera.py
@@ -57,6 +70,16 @@ endif()
 if(MAYA_MRENDERITEM_UFE_IDENTIFIER_SUPPORT)
     list(APPEND TEST_SCRIPT_FILES
         testSetsCmd.py
+    )
+endif()
+
+if(MAYA_ENABLE_NEW_PRIM_DELETE)
+    list(APPEND TEST_SCRIPT_FILES
+        testDeleteCmd.py
+    )
+else()
+    list(APPEND TEST_SCRIPT_FILES
+        testLegacyDeleteCmd.py
     )
 endif()
 

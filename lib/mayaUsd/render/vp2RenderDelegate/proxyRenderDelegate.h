@@ -59,6 +59,11 @@
 */
 #endif
 
+// Use the latest MPxSubSceneOverride API
+#ifndef OPENMAYA_MPXSUBSCENEOVERRIDE_LATEST_NAMESPACE
+#define OPENMAYA_MPXSUBSCENEOVERRIDE_LATEST_NAMESPACE OPENMAYA_MAJOR_NAMESPACE
+#endif
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 class HdRenderDelegate;
@@ -108,7 +113,9 @@ enum class UsdPointInstancesPickMode
     Use MAYAUSD_DISABLE_VP2_RENDER_DELEGATE  env variable before loading USD
     plugin to switch to the legacy rendering with draw override approach.
 */
-class ProxyRenderDelegate : public MHWRender::MPxSubSceneOverride
+class ProxyRenderDelegate
+    : public Autodesk::Maya::OPENMAYA_MPXSUBSCENEOVERRIDE_LATEST_NAMESPACE::MHWRender::
+          MPxSubSceneOverride
 {
     ProxyRenderDelegate(const MObject& obj);
 
@@ -171,7 +178,7 @@ public:
     const MColor& GetWireframeColor() const;
 
     MAYAUSD_CORE_PUBLIC
-    GfVec3f GetCurveDefaultColor();
+    GfVec3f GetDefaultColor(const TfToken& className);
 
     // Returns the selection highlight color for a given HdPrim type.
     // If className is empty, returns the lead highlight color.
@@ -300,8 +307,10 @@ private:
 
     MColorCache  _activeMeshColorCache { MColor(), 0 };
     MColorCache  _activeCurveColorCache { MColor(), 0 };
+    MColorCache  _activePointsColorCache { MColor(), 0 };
     MColorCache  _leadColorCache { MColor(), 0 };
     GfVec3fCache _dormantCurveColorCache { GfVec3f(), 0 };
+    GfVec3fCache _dormantPointsColorCache { GfVec3f(), 0 };
 
     //! A collection of Rprims to prepare render data for specified reprs
     std::unique_ptr<HdRprimCollection> _defaultCollection;

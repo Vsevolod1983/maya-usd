@@ -446,7 +446,8 @@ MHWRender::MPxSubSceneOverride* ProxyRenderDelegate::Creator(const MObject& obj)
 
 //! \brief  Constructor
 ProxyRenderDelegate::ProxyRenderDelegate(const MObject& obj)
-    : MHWRender::MPxSubSceneOverride(obj)
+    : Autodesk::Maya::OPENMAYA_MPXSUBSCENEOVERRIDE_LATEST_NAMESPACE::MHWRender::MPxSubSceneOverride(
+        obj)
 {
     MDagPath proxyDagPath;
     MDagPath::getAPathTo(obj, proxyDagPath);
@@ -524,6 +525,10 @@ void ProxyRenderDelegate::_ClearInvalidData(MSubSceneContainer& container)
     // and clear everything. If this is a performance problem we can probably store the old value
     // of excluded prims, compare it to the new value and only add back the difference.
     if (!_proxyShapeData->IsUsdStageUpToDate() || !_proxyShapeData->IsExcludePrimsUpToDate()) {
+        // Tell texture loading tasks to terminate (exit) if they have not finished yet
+        if (_renderDelegate) {
+            dynamic_cast<HdVP2RenderDelegate*>(_renderDelegate.get())->CleanupMaterials();
+        }
         // delete everything so we can re-initialize with the new stage
         _ClearRenderDelegate();
         container.clear();
@@ -755,20 +760,25 @@ void ProxyRenderDelegate::_Execute(const MHWRender::MFrameContext& frameContext)
 #else // !defined(MAYA_ENABLE_UPDATE_FOR_SELECTION)
     HdReprSelector reprSelector = kPointsReprSelector;
 
-    constexpr bool inSelectionPass = false;
+    constexpr bool     inSelectionPass = false;
 #if !defined(MAYA_NEW_POINT_SNAPPING_SUPPORT)
-    constexpr bool inPointSnapping = false;
+    constexpr bool     inPointSnapping = false;
 #endif
 #endif // defined(MAYA_ENABLE_UPDATE_FOR_SELECTION)
 
-    const unsigned int displayStyle = frameContext.getDisplayStyle();
+    const unsigned int currentDisplayStyle = frameContext.getDisplayStyle();
 
     // Query the wireframe color assigned to proxy shape.
-    if (displayStyle
+    if (currentDisplayStyle
         & (MHWRender::MFrameContext::kBoundingBox | MHWRender::MFrameContext::kWireFrame)) {
         _wireframeColor
             = MHWRender::MGeometryUtilities::wireframeColor(_proxyShapeData->ProxyDagPath());
     }
+#ifdef MAYA_HAS_DISPLAY_STYLE_ALL_VIEWPORTS
+    const unsigned int displayStyle = frameContext.getDisplayStyleOfAllViewports();
+#else
+    const unsigned int displayStyle = currentDisplayStyle;
+#endif
 
     // Work around USD issue #1516. There is a significant performance overhead caused by populating
     // selection, so only force the populate selection to occur when we detect a change which
@@ -839,7 +849,7 @@ void ProxyRenderDelegate::_Execute(const MHWRender::MFrameContext& frameContext)
             // this is slow.
             auto& rprims = _renderIndex->GetRprimIds();
             for (auto path : rprims) {
-                changeTracker.MarkRprimDirty(path, MayaPrimCommon::DirtyDisplayMode);
+                changeTracker.MarkRprimDirty(path, MayaUsdRPrim::DirtyDisplayMode);
             }
         }
 
@@ -933,7 +943,12 @@ SdfPath ProxyRenderDelegate::GetScenePrimPath(
 SdfPath ProxyRenderDelegate::GetScenePrimPath(const SdfPath& rprimId, int instanceIndex) const
 #endif
 {
-#if defined(USD_IMAGING_API_VERSION) && USD_IMAGING_API_VERSION >= 14
+#if defined(USD_IMAGING_API_VERSION) && USD_IMAGING_API_VERSION >= 16
+    // Can no longer pass ALL_INSTANCES as the instanceIndex
+    SdfPath usdPath = (instanceIndex == UsdImagingDelegate::ALL_INSTANCES)
+        ? rprimId.ReplacePrefix(_sceneDelegate->GetDelegateID(), SdfPath::AbsoluteRootPath())
+        : _sceneDelegate->GetScenePrimPath(rprimId, instanceIndex, instancerContext);
+#elif defined(USD_IMAGING_API_VERSION) && USD_IMAGING_API_VERSION >= 14
     SdfPath usdPath = _sceneDelegate->GetScenePrimPath(rprimId, instanceIndex, instancerContext);
 #elif defined(USD_IMAGING_API_VERSION) && USD_IMAGING_API_VERSION >= 13
     SdfPath usdPath = _sceneDelegate->GetScenePrimPath(rprimId, instanceIndex);
@@ -1260,12 +1275,12 @@ void ProxyRenderDelegate::_UpdateSelectionStates()
         // When the selection changes then we have to update all the selected render
         // items. Set a dirty flag on each of the rprims so they know what to update.
         // Avoid trying to set dirty the absolute root as it is not a Rprim.
-        HdDirtyBits dirtySelectionBits = MayaPrimCommon::DirtySelectionHighlight;
+        HdDirtyBits dirtySelectionBits = MayaUsdRPrim::DirtySelectionHighlight;
 #ifdef MAYA_NEW_POINT_SNAPPING_SUPPORT
         // If the selection mode changes, for example into or out of point snapping,
         // then we need to do a little extra work.
         if (_selectionModeChanged)
-            dirtySelectionBits |= MayaPrimCommon::DirtySelectionMode;
+            dirtySelectionBits |= MayaUsdRPrim::DirtySelectionMode;
 #endif
         HdChangeTracker& changeTracker = _renderIndex->GetChangeTracker();
         for (auto path : *dirtyPaths) {
@@ -1474,35 +1489,55 @@ HdVP2SelectionStatus ProxyRenderDelegate::GetSelectionStatus(const SdfPath& path
 //! \brief  Query the wireframe color assigned to the proxy shape.
 const MColor& ProxyRenderDelegate::GetWireframeColor() const { return _wireframeColor; }
 
-GfVec3f ProxyRenderDelegate::GetCurveDefaultColor()
+GfVec3f ProxyRenderDelegate::GetDefaultColor(const TfToken& className)
 {
-    // Check the cache. It is safe since _dormantCurveColorCache.second is atomic
-    if (_dormantCurveColorCache.second == _frameCounter) {
-        return _dormantCurveColorCache.first;
+    static const GfVec3f kDefaultColor(0.000f, 0.016f, 0.376f);
+
+    // Prepare to construct the query command.
+    const char*   queryName = "unsupported";
+    GfVec3fCache* colorCache = nullptr;
+    if (className == HdPrimTypeTokens->basisCurves) {
+        colorCache = &_dormantCurveColorCache;
+        queryName = "curve";
+    } else if (className == HdPrimTypeTokens->points) {
+        colorCache = &_dormantPointsColorCache;
+        queryName = "particle";
+    } else {
+        TF_WARN(
+            "ProxyRenderDelegate::GetDefaultColor - unsupported class: '%s'",
+            className.IsEmpty() ? "empty" : className.GetString().c_str());
+        return kDefaultColor;
+    }
+
+    // Check the cache. It is safe since colorCache->second is atomic
+    if (colorCache->second == _frameCounter) {
+        return colorCache->first;
     }
 
     // Enter the mutex and check the cache again
     std::lock_guard<std::mutex> mutexGuard(_mayaCommandEngineMutex);
-    if (_dormantCurveColorCache.second == _frameCounter) {
-        return _dormantCurveColorCache.first;
+    if (colorCache->second == _frameCounter) {
+        return colorCache->first;
     }
+
+    MString queryCommand = "int $index = `displayColor -q -dormant \"";
+    queryCommand += queryName;
+    queryCommand += "\"`; colorIndex -q $index;";
 
     // Execute Maya command engine to fetch the color
     MDoubleArray colorResult;
-    MGlobal::executeCommand(
-        "int $index = `displayColor -q -dormant \"curve\"`; colorIndex -q $index;", colorResult);
+    MGlobal::executeCommand(queryCommand, colorResult);
 
     if (colorResult.length() == 3) {
-        _dormantCurveColorCache.first = GfVec3f(colorResult[0], colorResult[1], colorResult[2]);
+        colorCache->first = GfVec3f(colorResult[0], colorResult[1], colorResult[2]);
     } else {
-        TF_WARN("Failed to obtain curve default color");
-        // In case of an error, return the default navy-blue color
-        _dormantCurveColorCache.first = GfVec3f(0.000f, 0.016f, 0.376f);
+        TF_WARN("Failed to obtain default color");
+        colorCache->first = kDefaultColor;
     }
 
     // Update the cache and return
-    _dormantCurveColorCache.second = _frameCounter;
-    return _dormantCurveColorCache.first;
+    colorCache->second = _frameCounter;
+    return colorCache->first;
 }
 
 //! \brief
@@ -1521,11 +1556,18 @@ MColor ProxyRenderDelegate::GetSelectionHighlightColor(const TfToken& className)
         queryName = "lead";
     } else if (className == HdPrimTypeTokens->mesh) {
         colorCache = &_activeMeshColorCache;
+#if MAYA_API_VERSION >= 20230000
         fromPalette = false;
         queryName = "polymeshActive";
+#else
+        queryName = "polymesh";
+#endif
     } else if (className == HdPrimTypeTokens->basisCurves) {
         colorCache = &_activeCurveColorCache;
         queryName = "curve";
+    } else if (className == HdPrimTypeTokens->points) {
+        colorCache = &_activePointsColorCache;
+        queryName = "particle";
     } else {
         TF_WARN(
             "ProxyRenderDelegate::GetSelectionHighlightColor - unsupported class: '%s'",

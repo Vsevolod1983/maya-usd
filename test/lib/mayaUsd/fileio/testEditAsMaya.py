@@ -19,13 +19,14 @@
 import fixturesUtils
 
 from usdUtils import createSimpleXformScene
+from ufeUtils import ufeFeatureSetVersion
 
 import mayaUsd.lib
 
 import mayaUtils
 import mayaUsd.ufe
 
-from pxr import Usd, UsdGeom, Gf
+from pxr import Usd, UsdGeom, Gf, Sdf
 
 from maya import cmds
 from maya import standalone
@@ -61,9 +62,26 @@ class EditAsMayaTestCase(unittest.TestCase):
     def setUp(self):
         cmds.file(new=True, force=True)
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testTransformEditAsMaya(self):
         '''Edit a USD transform as a Maya object.'''
+
+        (ps, aXlateOp, aXlation, aUsdUfePathStr, aUsdUfePath, aUsdItem,
+             bXlateOp, bXlation, bUsdUfePathStr, bUsdUfePath, bUsdItem) = createSimpleXformScene()
+
+        # Edit "B" Prim as Maya data.
+        with mayaUsd.lib.OpUndoItemList():
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.canEditAsMaya(bUsdUfePathStr))
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.editAsMaya(bUsdUfePathStr))
+
+        # Verify that its ancestor "A" Prim cannot be edited as Maya data.
+        with mayaUsd.lib.OpUndoItemList():
+            self.assertFalse(mayaUsd.lib.PrimUpdaterManager.canEditAsMaya(aUsdUfePathStr))
+            self.assertFalse(mayaUsd.lib.PrimUpdaterManager.editAsMaya(aUsdUfePathStr))
+
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
+    def testCannotEditAsMayaAnAncestor(self):
+        '''Test that trying to edit an ancestor is not allowed.'''
 
         (ps, xlateOp, xlation, aUsdUfePathStr, aUsdUfePath, aUsdItem,
          _, _, _, _, _) = createSimpleXformScene()
@@ -111,15 +129,21 @@ class EditAsMayaTestCase(unittest.TestCase):
 
         assertVectorAlmostEqual(self, mayaValues, usdValues)
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testEditAsMayaUndoRedo(self):
         '''Edit a USD transform as a Maya object and apply undo and redo.'''
 
         (ps, xlateOp, xlation, aUsdUfePathStr, aUsdUfePath, aUsdItem,
          _, _, _, _, _) = createSimpleXformScene()
 
+        aPrim = mayaUsd.ufe.ufePathToPrim(aUsdUfePathStr)
+
         # Edit aPrim as Maya data.
         self.assertTrue(mayaUsd.lib.PrimUpdaterManager.canEditAsMaya(aUsdUfePathStr))
+
+        # Make a selection before edit as Maya.
+        cmds.select('persp')
+        previousSn = cmds.ls(sl=True, ufe=True, long=True)
 
         cmds.mayaUsdEditAsMaya(aUsdUfePathStr)
 
@@ -159,6 +183,15 @@ class EditAsMayaTestCase(unittest.TestCase):
 
             assertVectorAlmostEqual(self, mayaValues, usdValues)
 
+            # Selection is on the edited Maya object.
+            sn = cmds.ls(sl=True, ufe=True, long=True)
+            self.assertEqual(len(sn), 1)
+            self.assertEqual(sn[0], aMayaPathStr)
+
+            # Read the pull information from the pulled prim.
+            aMayaPullPathStr = mayaUsd.lib.PrimUpdaterManager.readPullInformation(aPrim)
+            self.assertEqual(aMayaPathStr, aMayaPullPathStr)
+
         verifyEditedScene()
 
         # Undo
@@ -168,6 +201,10 @@ class EditAsMayaTestCase(unittest.TestCase):
             # Maya node is removed.
             with self.assertRaises(RuntimeError):
                 om.MSelectionList().add(aMayaPathStr)
+            # Selection is restored.
+            self.assertEqual(cmds.ls(sl=True, ufe=True, long=True), previousSn)
+            # No more pull information on the prim.
+            self.assertEqual(len(mayaUsd.lib.PrimUpdaterManager.readPullInformation(aPrim)), 0)
 
         verifyNoLongerEdited()
         
@@ -176,7 +213,7 @@ class EditAsMayaTestCase(unittest.TestCase):
 
         verifyEditedScene()
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testIllegalEditAsMaya(self):
         '''Trying to edit as Maya on object that doesn't support it.'''
         
@@ -203,7 +240,7 @@ class EditAsMayaTestCase(unittest.TestCase):
         #     self.assertFalse(mayaUsd.lib.PrimUpdaterManager.canEditAsMaya(scopePathStr))
         #     self.assertFalse(mayaUsd.lib.PrimUpdaterManager.editAsMaya(scopePathStr))
 
-    @unittest.skipIf(os.getenv('UFE_PREVIEW_VERSION_NUM', '0000') < '3006', 'Test only available in UFE preview version 0.3.6 and greater')
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
     def testSessionLayer(self):
         '''Verify that the edit gets on the sessionLayer instead of the editTarget layer.'''
         
@@ -234,6 +271,45 @@ class EditAsMayaTestCase(unittest.TestCase):
         self.assertTrue(stage.GetSessionLayer().empty)
 
         self.assertEqual(prim.GetCustomDataByKey(kPullPrimMetadataKey), None)
+
+
+    @unittest.skipUnless(ufeFeatureSetVersion() >= 3, 'Test only available in UFE v3 or greater.')
+    def testTargetLayer(self):
+        '''Verify that the target layer is not moved after Edit As Maya.'''
+        
+        import mayaUsd_createStageWithNewLayer
+
+        proxyShapePathStr = mayaUsd_createStageWithNewLayer.createStageWithNewLayer()
+        stage = mayaUsd.lib.GetPrim(proxyShapePathStr).GetStage()
+        rootLayer = stage.GetRootLayer()
+
+        currentLayer = stage.GetEditTarget().GetLayer()
+        self.assertEqual(currentLayer, rootLayer) # Current layer should be the Anonymous Root Layer
+
+        sessionLayer = stage.GetSessionLayer()
+        prim = stage.DefinePrim('/A', 'Xform')
+
+        primPathStr = proxyShapePathStr + ',/A'
+
+        self.assertTrue(stage.GetSessionLayer().empty)
+
+        otherLayerId = cmds.mayaUsdLayerEditor(rootLayer.identifier, edit=True, addAnonymous="otherLayer")[0]
+        otherLayer = Sdf.Layer.Find(otherLayerId)
+
+        stage.SetEditTarget(otherLayer)
+
+        currentLayer = stage.GetEditTarget().GetLayer()
+        self.assertEqual(currentLayer, otherLayer) # Current layer should be the Other Layer
+
+        with mayaUsd.lib.OpUndoItemList():
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.canEditAsMaya(primPathStr))
+            self.assertTrue(mayaUsd.lib.PrimUpdaterManager.editAsMaya(primPathStr))
+
+        self.assertFalse(stage.GetSessionLayer().empty)
+
+        currentLayer = stage.GetEditTarget().GetLayer()
+        self.assertEqual(currentLayer, otherLayer) # Current layer should still be the Other Layer
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

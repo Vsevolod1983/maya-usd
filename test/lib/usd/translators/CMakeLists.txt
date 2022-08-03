@@ -22,7 +22,6 @@ set(TEST_SCRIPT_FILES
     testUsdExportNurbsCurve.py
     testUsdExportOpenLayer.py
     testUsdExportOverImport.py
-    testUsdExportUsdzPackage.py
     testUsdExportUsdPreviewSurface.py
     testUsdExportParentScope.py
     # To investigate: following test asserts in MFnParticleSystem, but passes.
@@ -37,6 +36,7 @@ set(TEST_SCRIPT_FILES
     ## XXX: This test is disabled by default since it requires the RenderMan for Maya plugin.
     # testUsdExportRfMLight.py
     testUsdExportRoots.py
+    testUsdExportRootsAndParentScope.py
     testUsdExportSelection.py
     testUsdExportSelectionHierarchy.py
     testUsdExportShadingInstanced.py
@@ -90,6 +90,13 @@ if(BUILD_PXR_PLUGIN)
     # Pixar plugin.
     list(APPEND TEST_SCRIPT_FILES
         testUsdExportUVTransforms.py
+    )
+
+    # This test uses the file "asset.ma" which
+    # requires the plugin "pxrUsdPreviewSurface" that is built by the
+    # Pixar plugin.
+    list(APPEND TEST_SCRIPT_FILES
+        testUsdExportUsdzPackage.py
     )
 endif()
 
@@ -212,9 +219,6 @@ if (MAYA_APP_VERSION VERSION_GREATER 2022 AND PXR_VERSION VERSION_GREATER 2102)
         mayaUsd_add_test(${target}
             PYTHON_MODULE ${target}
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            ENV
-                "PXR_MTLX_STDLIB_SEARCH_PATHS=${PXR_USD_LOCATION}/libraries"
-                "PXR_MTLX_STDLIB_SEARCH_PATHS=${CMAKE_INSTALL_PREFIX}/libraries"
         )
 
         # Add a ctest label to these tests for easy filtering.
@@ -242,6 +246,8 @@ set_property(TEST testUsdMayaListShadingModesCommand APPEND PROPERTY LABELS tran
 
 # Requires Physics API to test some exporters:
 if (PXR_VERSION VERSION_GREATER 2105)
+    # Once of the tests in this file requires UsdMaya (from the Pixar plugin). That test
+    # will be skipped if not found (probably because BUILD_PXR_PLUGIN is off).
     mayaUsd_add_test(testUsdExportSchemaApi
         PYTHON_MODULE testUsdExportSchemaApi
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -251,3 +257,12 @@ if (PXR_VERSION VERSION_GREATER 2105)
     )
     set_property(TEST testUsdExportSchemaApi APPEND PROPERTY LABELS translators)
 endif()
+
+mayaUsd_add_test(testUsdImportExportSiteSpecificConfig
+    PYTHON_MODULE testUsdImportExportSiteSpecificConfig
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    ENV
+        "${PXR_OVERRIDE_PLUGINPATH_NAME}=${CMAKE_CURRENT_BINARY_DIR}/../plugin/SiteSpecificConfig"
+)
+set_property(TEST testUsdImportExportSiteSpecificConfig APPEND PROPERTY LABELS translators)
+

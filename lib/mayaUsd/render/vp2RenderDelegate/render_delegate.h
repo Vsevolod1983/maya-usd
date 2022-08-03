@@ -135,10 +135,14 @@ public:
 
     MHWRender::MShaderInstance* GetFallbackShader(const MColor& color) const;
     MHWRender::MShaderInstance* GetFallbackCPVShader() const;
+    MHWRender::MShaderInstance* GetPointsFallbackShader(const MColor& color) const;
+    MHWRender::MShaderInstance* GetPointsFallbackCPVShader() const;
     MHWRender::MShaderInstance* Get3dSolidShader(const MColor& color) const;
     MHWRender::MShaderInstance* Get3dDefaultMaterialShader() const;
     MHWRender::MShaderInstance* Get3dCPVSolidShader() const;
-    MHWRender::MShaderInstance* Get3dFatPointShader() const;
+    MHWRender::MShaderInstance* Get3dCPVFatPointShader() const;
+    MHWRender::MShaderInstance*
+    Get3dFatPointShader(const MColor& color = MColor(1.f, 1.f, 1.f)) const;
 
     MHWRender::MShaderInstance* GetBasisCurvesFallbackShader(
         const TfToken& curveType,
@@ -159,6 +163,8 @@ public:
 
     const HdVP2BBoxGeom& GetSharedBBoxGeom() const;
 
+    void CleanupMaterials();
+
     static const int sProfilerCategory; //!< Profiler category
 
 private:
@@ -172,6 +178,8 @@ private:
         _renderDelegateMutex; //!< Mutex protecting construction/destruction of render delegate
     static HdResourceRegistrySharedPtr
         _resourceRegistry; //!< Shared and unused by VP2 resource registry
+
+    std::unordered_set<HdSprim*> _materialSprims;
 
     std::unique_ptr<HdVP2RenderParam>
             _renderParam; //!< Render param used to provided access to VP2 during prim synchronization

@@ -133,6 +133,8 @@ const UsdPrim& ProxyShapeHierarchy::getUsdRootPrim() const
 
 Ufe::SceneItem::Ptr ProxyShapeHierarchy::sceneItem() const { return fItem; }
 
+#if (UFE_PREVIEW_VERSION_NUM >= 4004)
+
 bool ProxyShapeHierarchy::hasChildren() const
 {
     // We have an extra logic in createUFEChildList to remap and filter
@@ -142,6 +144,35 @@ bool ProxyShapeHierarchy::hasChildren() const
     // so going after maintainability.
     return !children().empty();
 }
+
+bool ProxyShapeHierarchy::hasFilteredChildren(const ChildFilter& childFilter) const
+{
+    // We have an extra logic in createUFEChildList to remap and filter
+    // prims. Going this direction is more costly, but easier to maintain.
+    //
+    // I don't have data that proves we need to worry about performance in here,
+    // so going after maintainability.
+    return !filteredChildren(childFilter).empty();
+}
+
+#else
+
+bool ProxyShapeHierarchy::hasChildren() const
+{
+    // Return children of the USD root.
+    const UsdPrim& rootPrim = getUsdRootPrim();
+    if (!rootPrim.IsValid())
+        return false;
+
+    // We have an extra logic in createUFEChildList to remap and filter
+    // prims. Going this direction is more costly, but easier to maintain.
+    //
+    // I don't have data that proves we need to worry about performance in here,
+    // so going after maintainability.
+    return !createUFEChildList(getUSDFilteredChildren(rootPrim), false /*filterInactive*/).empty();
+}
+
+#endif
 
 Ufe::SceneItemList ProxyShapeHierarchy::children() const
 {
@@ -190,21 +221,21 @@ ProxyShapeHierarchy::createUFEChildList(const UsdPrimSiblingRange& range, bool f
 #ifdef UFE_V3_FEATURES_AVAILABLE
         if (PXR_NS::PrimUpdaterManager::readPullInformation(child, dagPathStr)) {
             auto item = Ufe::Hierarchy::createItem(Ufe::PathString::path(dagPathStr));
-            if (TF_VERIFY(item, "No item for pulled path '%s'\n", dagPathStr.c_str())) {
+            // if we mapped to a valid object, insert it. it's possible that we got stale object
+            // so in this case simply fallback to the usual processing of items
+            if (item) {
                 children.emplace_back(item);
+                continue;
             }
-        } else {
-#endif
-            if (!filterInactive || child.IsActive()) {
-                children.emplace_back(UsdSceneItem::create(
-                    parentPath
-                        + Ufe::PathSegment(
-                            Ufe::PathComponent(child.GetName().GetString()), g_USDRtid, '/'),
-                    child));
-            }
-#ifdef UFE_V3_FEATURES_AVAILABLE
         }
 #endif
+        if (!filterInactive || child.IsActive()) {
+            children.emplace_back(UsdSceneItem::create(
+                parentPath
+                    + Ufe::PathSegment(
+                        Ufe::PathComponent(child.GetName().GetString()), g_USDRtid, '/'),
+                child));
+        }
     }
     return children;
 }
@@ -239,7 +270,7 @@ ProxyShapeHierarchy::insertChild(const Ufe::SceneItem::Ptr& child, const Ufe::Sc
     return insertChildCommand->insertedChild();
 }
 
-#if (UFE_PREVIEW_VERSION_NUM >= 3005)
+#ifdef UFE_V3_FEATURES_AVAILABLE
 Ufe::SceneItem::Ptr ProxyShapeHierarchy::createGroup(const Ufe::PathComponent& name) const
 {
     Ufe::SceneItem::Ptr createdItem;
@@ -272,13 +303,8 @@ Ufe::SceneItem::Ptr ProxyShapeHierarchy::createGroup(
 }
 #endif
 
-#if (UFE_PREVIEW_VERSION_NUM >= 3001)
+#ifdef UFE_V3_FEATURES_AVAILABLE
 Ufe::InsertChildCommand::Ptr
-#else
-Ufe::UndoableCommand::Ptr
-#endif
-
-#if (UFE_PREVIEW_VERSION_NUM >= 3005)
 ProxyShapeHierarchy::createGroupCmd(const Ufe::PathComponent& name) const
 {
     auto usdItem = UsdSceneItem::create(sceneItem()->path(), getUsdRootPrim());
@@ -286,8 +312,9 @@ ProxyShapeHierarchy::createGroupCmd(const Ufe::PathComponent& name) const
     return UsdUndoCreateGroupCommand::create(usdItem, name.string());
 }
 #else
-ProxyShapeHierarchy::createGroupCmd(const Ufe::Selection& selection, const Ufe::PathComponent& name)
-    const
+Ufe::UndoableCommand::Ptr ProxyShapeHierarchy::createGroupCmd(
+    const Ufe::Selection&     selection,
+    const Ufe::PathComponent& name) const
 {
     auto usdItem = UsdSceneItem::create(sceneItem()->path(), getUsdRootPrim());
 
