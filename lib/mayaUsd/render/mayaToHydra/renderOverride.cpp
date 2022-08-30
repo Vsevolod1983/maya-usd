@@ -742,9 +742,9 @@ void MtohRenderOverride::_InitHydraResources()
     if (!renderDelegate)
         return;
 
-	// set "metersPerUnit" setting. It can be used by render delegate to produce physically correct images
-	// for now Maya always operates with centimeters
-	renderDelegate->SetRenderSetting(UsdGeomTokens->metersPerUnit, VtValue(0.1));
+    // set "metersPerUnit" setting. It can be used by render delegate to produce physically correct images
+    // for now Maya always operates with centimeters
+    renderDelegate->SetRenderSetting(UsdGeomTokens->metersPerUnit, VtValue(0.01));
 
     _renderIndex = HdRenderIndex::New(renderDelegate, { &_hgiDriver });
     if (!_renderIndex)
