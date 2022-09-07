@@ -10,6 +10,7 @@
 #include <maya/MRenderView.h>
 #include <maya/MTimerMessage.h>
 #include <maya/MCommonRenderSettingsData.h>
+#include <maya/MDistance.h>
 
 #include <pxr/base/gf/matrix4d.h>
 #include <pxr/base/tf/instantiateSingleton.h>
@@ -289,6 +290,11 @@ bool RprUsdProductionRender::InitHydraResources()
 	auto* renderDelegate = _rendererPlugin->CreateRenderDelegate();
 	if (!renderDelegate)
 		return false;
+
+    // set "metersPerUnit" setting. It can be used by render delegate to produce physically correct images
+    // for now unit size is always equal maya internal unit
+    static const TfToken metersPerUnitToken("stageMetersPerUnit", TfToken::Immortal);
+    renderDelegate->SetRenderSetting(metersPerUnitToken, VtValue(MDistance(1.00, MDistance::internalUnit()).asMeters()));
 
 	_renderIndex = HdRenderIndex::New(renderDelegate, { &_hgiDriver });
 	if (!_renderIndex)

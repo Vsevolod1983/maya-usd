@@ -51,6 +51,7 @@
 #include <maya/MSelectionList.h>
 #include <maya/MTimerMessage.h>
 #include <maya/MUiMessage.h>
+#include <maya/MDistance.h>
 
 #include <atomic>
 #include <chrono>
@@ -741,6 +742,11 @@ void MtohRenderOverride::_InitHydraResources()
     auto* renderDelegate = _rendererPlugin->CreateRenderDelegate();
     if (!renderDelegate)
         return;
+
+    // set "metersPerUnit" setting. It can be used by render delegate to produce physically correct images
+    // for now unit size is always equal maya internal unit
+    static const TfToken metersPerUnitToken("stageMetersPerUnit", TfToken::Immortal);
+    renderDelegate->SetRenderSetting(metersPerUnitToken, VtValue(MDistance(1.00, MDistance::internalUnit()).asMeters()));
 
     _renderIndex = HdRenderIndex::New(renderDelegate, { &_hgiDriver });
     if (!_renderIndex)
