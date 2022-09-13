@@ -26,12 +26,14 @@
 #include <pxr/imaging/hdx/tokens.h>
 #include <pxr/imaging/hgi/hgi.h>
 #include <pxr/imaging/hgi/tokens.h>
+#include <pxr/usd/usdGeom/camera.h>
 
 #include <hdMaya/delegates/delegateRegistry.h>
 #include <hdMaya/delegates/sceneDelegate.h>
 #include <hdMaya/utils.h>
 #include <mayaUsd/render/px_vp20/utils.h>
 #include <mayaUsd/utils/hash.h>
+
 
 #include <pxr/base/tf/debug.h>
 #include <thread>
@@ -385,7 +387,8 @@ void RprUsdProductionRender::ClearHydraResources()
 
 MStatus RprUsdProductionRender::Render()
 {
-	auto renderFrame = [&](bool markTime = false) {
+	auto renderFrame = [&](bool markTime = false) 
+	{
 		HdTaskSharedPtrVector tasks = _taskController->GetRenderingTasks();
 
 		SdfPath path;
@@ -414,22 +417,42 @@ MStatus RprUsdProductionRender::Render()
 
 	MStatus  status;
 
-	MFnCamera fnCamera(_camPath.node());
+	
+	UsdPrim cameraPrim = ProductionSettings::GetUsdCameraPrim();
+	bool isUsdCamera = cameraPrim.IsValid();
 
-	// From Maya Documentation: Returns the orthographic or perspective projection matrix for the camera. 
-	// The projection matrix that maya's software renderer uses is almost identical to the OpenGL projection matrix. 
-	// The difference is that maya uses a left hand coordinate system and so the entries [2][2] and [3][2] are negated.
-	MFloatMatrix projMatrix = fnCamera.projectionMatrix();
-	projMatrix[2][2] = -projMatrix[2][2];
-	projMatrix[3][2] = -projMatrix[3][2];
+	if (!isUsdCamera)
+	{
+		MFnCamera fnCamera(_camPath.node());
 
-	MMatrix viewMatrix = MFnTransform(_camPath.transform()).transformationMatrix();
+		// From Maya Documentation: Returns the orthographic or perspective projection matrix for the camera.  
+		// The projection matrix that maya's software renderer uses is almost identical to the OpenGL projection matrix. 
+		// The difference is that maya uses a left hand coordinate system and so the entries [2][2] and [3][2] are negated.
+		MFloatMatrix projMatrix = fnCamera.projectionMatrix();
+		projMatrix[2][2] = -projMatrix[2][2];
+		projMatrix[3][2] = -projMatrix[3][2];
+
+		MMatrix viewMatrix = MFnTransform(_camPath.transform()).transformationMatrix().inverse();
+
+		_taskController->SetFreeCameraMatrices(
+			GetGfMatrixFromMaya(viewMatrix),
+			GetGfMatrixFromMaya(projMatrix));
+	}
+	else
+	{	
+		UsdGeomCamera usdGeomCamera(cameraPrim);
+
+		GfCamera camera = usdGeomCamera.GetCamera(ProductionSettings::GetMayaUsdProxyShapeBase()->getTime());
+
+		GfMatrix4d projectionMatrix = camera.GetFrustum().ComputeProjectionMatrix();
+		GfMatrix4d viewMatrix = camera.GetFrustum().ComputeViewMatrix();
+
+		_taskController->SetFreeCameraMatrices(viewMatrix, projectionMatrix);
+
+		//camera.getmat
+	}
 
 	_taskController->SetEnablePresentation(false);
-
-	_taskController->SetFreeCameraMatrices(
-		GetGfMatrixFromMaya(viewMatrix.inverse()),
-		GetGfMatrixFromMaya(projMatrix));
 
 	_taskController->SetRenderParams(params);
 	if (!params.camera.IsEmpty())
@@ -486,6 +509,7 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 
 		renderer - edit - addGlobalsTab "Common" "createMayaSoftwareCommonGlobalsTab" "updateMayaSoftwareCommonGlobalsTab" rprUsdRender;
 		renderer - edit - addGlobalsTab "General" "createRprUsdRenderGeneralTab" "updateRprUsdRenderGeneralTab" rprUsdRender;
+		renderer - edit - addGlobalsTab "Camera" "createRprUsdRenderCameraTab" "updateRprUsdRenderCameraTab" rprUsdRender;
 	}
 
 	global proc string rprUsdRenderCmd(int $resolution0, int $resolution1,
@@ -520,6 +544,48 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 	{
 
 	}
+
+    global string $g_rprHdrUSDCamerasCtrl;
+	global proc createRprUsdRenderCameraTab()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		columnLayout -w 375 -adjustableColumn true rprmayausd_cameracolumn;
+		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera";
+		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: "`;
+		setParent ..;
+
+		connectControl $g_rprHdrUSDCamerasCtrl "defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected";
+
+	}
+
+	global proc updateRprUsdRenderCameraTab()
+	{
+
+	}
+
+	global proc HdRpr_clearUSDCameras()
+    {
+		global string $g_rprHdrUSDCamerasCtrl;
+        $items = `optionMenu $g_rprHdrUSDCamerasCtrl -q -itemListLong`;
+		print($items);
+        if ($items)
+		{
+            deleteUI($items);
+		}
+	}
+
+	global proc HdRpr_AddUsdCamera(string $cameraName)
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+		optionMenu -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+	}
+
+	global proc string GetCurrentUsdCamera()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+		return `optionMenu -q -v $g_rprHdrUSDCamerasCtrl`;
+	} 
 
 	registerRprUsdRenderer();
 )mel";

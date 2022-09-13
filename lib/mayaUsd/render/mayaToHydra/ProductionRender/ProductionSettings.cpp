@@ -17,6 +17,10 @@
 #include <maya/MSelectionList.h>
 #include <maya/MStatus.h>
 #include <maya/MSceneMessage.h>
+#include <maya/MItDependencyNodes.h>
+
+#include <mayaUsd/nodes/layerManager.h>
+
 
 #include <functional>
 #include <sstream>
@@ -30,6 +34,7 @@ static const std::string     kMtohRendererPostFix("__");
 
 MCallbackId ProductionSettings::_newSceneCallback = 0;
 MCallbackId ProductionSettings::_openSceneCallback = 0;
+MCallbackId ProductionSettings::_importSceneCallback = 0;
 
 
 TfToken _MangleString(
@@ -520,6 +525,14 @@ std::string ProductionSettings::CreateAttributes()
 
 	std::string controlCreationCmdTemplate = "attrControlGrp -label \"%s\" -attribute \"%s.%s\";";
 
+	// Create attrbiutes for usd camera
+
+	_CreateBoolAttribute(node, MString(g_attributePrefix.GetText()) + "Static_useUSDCamera", false, userDefaults);
+
+	TfTokenVector vec;
+	TfToken token;
+	//_CreateEnumAttribute(node, MString(g_attributePrefix.GetText()) + "Static_usdCameraSelected", vec, token, userDefaults);
+	_CreateStringAttribute(node, MString(g_attributePrefix.GetText()) + "Static_usdCameraSelected", "", userDefaults);
 
 	for (const HdRenderSettingDescriptor& attr : rendererSettingDescriptors) {
 		MString attrName = _MangleName(attr.key, g_attributePrefix).GetText();
@@ -706,19 +719,122 @@ void ProductionSettings::ApplySettings(HdRenderDelegate* renderDelegate)
 	}
 }
 
-void ProductionSettings::CheckRenderGlobals(void* data)
+void ProductionSettings::CheckRenderGlobals()
 {
 	CreateAttributes();
+}
+
+void ProductionSettings::ClearUsdCameraAttributes()
+{
+	MGlobal::executeCommand("HdRpr_clearUSDCameras();");
+}
+
+MayaUsdProxyShapeBase* ProductionSettings::GetMayaUsdProxyShapeBase()
+{
+	MFnDependencyNode  fn;
+	MItDependencyNodes iter(MFn::kPluginDependNode);
+	for (; !iter.isDone(); iter.next()) {
+		MObject mobj = iter.item();
+		fn.setObject(mobj);
+		MTypeId id = fn.typeId();
+		MString typeName = fn.typeName();
+		MString str = fn.absoluteName();
+
+		MString origRTypeName = MayaUsdProxyShapeBase::typeName;
+		if (!fn.isFromReferencedFile() && (MayaUsd::LayerManager::supportedNodeType(fn.typeId()))) {
+			MayaUsdProxyShapeBase* pShape = static_cast<MayaUsdProxyShapeBase*>(fn.userNode());
+			if (pShape) {
+				return pShape;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+UsdStageRefPtr ProductionSettings::GetUsdStage()
+{
+	MayaUsdProxyShapeBase* pShape = GetMayaUsdProxyShapeBase();
+
+	if (pShape)
+	{
+		return pShape->getUsdStage();
+	}
+
+	return nullptr;
+}
+
+
+void ProductionSettings::UsdCameraListRefresh()
+{
+	/*MObject nodeObj = GetSettingsNode();
+	if (nodeObj.isNull())
+	{
+		TF_WARN("[hdRPR production] render settings node was not found");
+		return;
+	}
+
+	MFnDependencyNode node(nodeObj);*/
+
+	ClearUsdCameraAttributes();
+
+	UsdStageRefPtr usdStageRefPtr = GetUsdStage();
+
+	if (usdStageRefPtr == nullptr)
+	{
+ 		return;
+	}
+
+	UsdPrimRange allPrims = usdStageRefPtr->TraverseAll();
+
+	UsdPrimRange::const_iterator it;
+
+	for (it = allPrims.begin(); it != allPrims.end(); ++it)
+	{
+		if (it->GetTypeName() == "Camera")
+		{
+			break;
+		}
+
+		std::string usdPath = it->GetPrimPath().GetAsString();
+
+		MString cmd;
+		cmd.format("HdRpr_AddUsdCamera(^1s)", MString(usdPath.c_str()));
+		MGlobal::executeCommand(cmd);
+	}
+}
+
+void ProductionSettings::OnSceneCallback(void* pbCallCheckRenderGlobals)
+{
+	if (pbCallCheckRenderGlobals)
+	{
+		CheckRenderGlobals();
+	}
+
+	UsdCameraListRefresh();
+}
+
+UsdPrim ProductionSettings::GetUsdCameraPrim()
+{
+	UsdStageRefPtr usdStage = GetUsdStage();
+
+	MString path = MGlobal::executeCommandStringResult("GetCurrentUsdCamera();");
+	SdfPath sdfpath(path.asChar());
+
+	return usdStage->GetPrimAtPath(sdfpath);
 }
 
 void ProductionSettings::RegisterCallbacks()
 {
 	MStatus status;
 
-	_newSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterNew, CheckRenderGlobals, NULL, &status);
+	_newSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterNew, OnSceneCallback, (void*) true, &status);
 	CHECK_MSTATUS(status);
 
-	_openSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterOpen, CheckRenderGlobals, NULL, &status);
+	_openSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterOpen, OnSceneCallback, (void*) true, &status);
+	CHECK_MSTATUS(status);
+
+	_importSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterImport, OnSceneCallback, NULL, &status);
 	CHECK_MSTATUS(status);
 }
 
@@ -727,9 +843,11 @@ void ProductionSettings::UnregisterCallbacks()
 	if (0 != _newSceneCallback) {
 		MSceneMessage::removeCallback(_newSceneCallback);
 		MSceneMessage::removeCallback(_openSceneCallback);
+		MSceneMessage::removeCallback(_importSceneCallback);
 
 		_newSceneCallback = 0;
 		_openSceneCallback = 0;
+		_importSceneCallback = 0;
 	}
 }
 

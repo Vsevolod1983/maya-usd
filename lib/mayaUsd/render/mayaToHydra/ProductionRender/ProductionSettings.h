@@ -26,6 +26,8 @@
 #include <pxr/base/vt/value.h>
 #include <pxr/pxr.h>
 #include <pxr/imaging/hd/renderDelegate.h>
+#include <pxr/usd/usd/primRange.h>
+#include <mayaUsd/nodes/proxyShapeBase.h>
 
 #include <maya/MObject.h>
 #include <maya/MMessage.h>
@@ -35,6 +37,7 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+
 class ProductionSettings
 {
 public:
@@ -43,16 +46,28 @@ public:
  
     // Creating render globals attributes on "defaultRenderGlobals"
 	static std::string CreateAttributes();
+	static void ClearUsdCameraAttributes();
 	static void ApplySettings(HdRenderDelegate* renderDelegate);
 
-	static void CheckRenderGlobals(void* data);
+	static void CheckRenderGlobals();
+	static void UsdCameraListRefresh();
+	static void OnSceneCallback(void* );
+
 	static void RegisterCallbacks();
 	static void UnregisterCallbacks();
+
+	static UsdPrim GetUsdCameraPrim();
+
+	static MayaUsdProxyShapeBase* GetMayaUsdProxyShapeBase();
+
+private:
+	static UsdStageRefPtr GetUsdStage();
 
 private:
 	//static MString _attributePrefix;
 	static MCallbackId _newSceneCallback;
 	static MCallbackId _openSceneCallback;
+	static MCallbackId _importSceneCallback;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
