@@ -57,6 +57,7 @@ public:
 	static void UnregisterCallbacks();
 
 	static UsdPrim GetUsdCameraPrim();
+	static bool IsUSDCameraToUse();
 
 	static MayaUsdProxyShapeBase* GetMayaUsdProxyShapeBase();
 

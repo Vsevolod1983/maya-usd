@@ -791,15 +791,15 @@ void ProductionSettings::UsdCameraListRefresh()
 
 	for (it = allPrims.begin(); it != allPrims.end(); ++it)
 	{
-		if (it->GetTypeName() == "Camera")
+		if (it->GetTypeName() != "Camera")
 		{
-			break;
+			continue;
 		}
 
 		std::string usdPath = it->GetPrimPath().GetAsString();
 
 		MString cmd;
-		cmd.format("HdRpr_AddUsdCamera(^1s)", MString(usdPath.c_str()));
+		cmd.format("HdRpr_AddUsdCamera(\"^1s\")", MString(usdPath.c_str()));
 		MGlobal::executeCommand(cmd);
 	}
 }
@@ -814,6 +814,20 @@ void ProductionSettings::OnSceneCallback(void* pbCallCheckRenderGlobals)
 	UsdCameraListRefresh();
 }
 
+bool ProductionSettings::IsUSDCameraToUse()
+{
+	MObject nodeObj = GetSettingsNode();
+	if (nodeObj.isNull())
+	{
+		TF_WARN("[hdRPR production] render settings node was not found");
+		return false;
+	}
+
+	MFnDependencyNode node(nodeObj);
+	return node.findPlug("HdRprPlugin_Prod_Static_useUSDCamera").asBool();
+}
+
+
 UsdPrim ProductionSettings::GetUsdCameraPrim()
 {
 	UsdStageRefPtr usdStage = GetUsdStage();
@@ -822,6 +836,13 @@ UsdPrim ProductionSettings::GetUsdCameraPrim()
 	SdfPath sdfpath(path.asChar());
 
 	return usdStage->GetPrimAtPath(sdfpath);
+}
+
+void callback(void*)
+{
+	int i = 0;
+	i++;
+
 }
 
 void ProductionSettings::RegisterCallbacks()

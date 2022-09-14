@@ -417,9 +417,8 @@ MStatus RprUsdProductionRender::Render()
 
 	MStatus  status;
 
-	
 	UsdPrim cameraPrim = ProductionSettings::GetUsdCameraPrim();
-	bool isUsdCamera = cameraPrim.IsValid();
+	bool isUsdCamera = ProductionSettings::IsUSDCameraToUse() && cameraPrim.IsValid();
 
 	if (!isUsdCamera)
 	{
@@ -546,39 +545,70 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 	}
 
     global string $g_rprHdrUSDCamerasCtrl;
+    global string $usdCamerasArray[];
+
 	global proc createRprUsdRenderCameraTab()
 	{
 		global string $g_rprHdrUSDCamerasCtrl;
+		global string $usdCamerasArray[];
 
 		columnLayout -w 375 -adjustableColumn true rprmayausd_cameracolumn;
-		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera";
+		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera" -changeCommand "OnIsUseUsdCameraChanged";
 		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: "`;
+		print ("aaa: " + $g_rprHdrUSDCamerasCtrl);
 		setParent ..;
 
-		connectControl $g_rprHdrUSDCamerasCtrl "defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected";
+		for ($i = 0; $i < size($usdCamerasArray); $i++) 
+		{
+			$cameraName = $usdCamerasArray[$i];
+			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		}
 
+		//connectControl $g_rprHdrUSDCamerasCtrl "defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected";
+
+		OnIsUseUsdCameraChanged();
+	}
+
+	global proc OnIsUseUsdCameraChanged()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+		$enabled = `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera`;
+		optionMenu -e -en $enabled $g_rprHdrUSDCamerasCtrl;
 	}
 
 	global proc updateRprUsdRenderCameraTab()
 	{
 
-	}
+	} 
 
 	global proc HdRpr_clearUSDCameras()
     {
 		global string $g_rprHdrUSDCamerasCtrl;
-        $items = `optionMenu $g_rprHdrUSDCamerasCtrl -q -itemListLong`;
-		print($items);
-        if ($items)
+		global string $usdCamerasArray[];
+
+		if ($g_rprHdrUSDCamerasCtrl == "")
+			return;
+
+        $items = `optionMenu -q -itemListLong $g_rprHdrUSDCamerasCtrl`;
+        if (size($items) > 0)
 		{
             deleteUI($items);
 		}
+
+		clear($usdCamerasArray);
 	}
 
 	global proc HdRpr_AddUsdCamera(string $cameraName)
 	{
 		global string $g_rprHdrUSDCamerasCtrl;
-		optionMenu -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		global string $usdCamerasArray[];
+
+		$exists = `optionMenu -q -exists $g_rprHdrUSDCamerasCtrl`;
+		$usdCamerasArray[size($usdCamerasArray)] = $cameraName;
+		if ($g_rprHdrUSDCamerasCtrl != "" && $exists)
+		{
+			optionMenu -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		}
 	}
 
 	global proc string GetCurrentUsdCamera()
