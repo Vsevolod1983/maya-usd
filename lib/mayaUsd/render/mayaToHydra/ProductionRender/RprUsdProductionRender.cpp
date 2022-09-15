@@ -555,7 +555,6 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		columnLayout -w 375 -adjustableColumn true rprmayausd_cameracolumn;
 		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera" -changeCommand "OnIsUseUsdCameraChanged";
 		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: "`;
-		print ("aaa: " + $g_rprHdrUSDCamerasCtrl);
 		setParent ..;
 
 		for ($i = 0; $i < size($usdCamerasArray); $i++) 
@@ -563,8 +562,6 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 			$cameraName = $usdCamerasArray[$i];
 			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
 		}
-
-		//connectControl $g_rprHdrUSDCamerasCtrl "defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected";
 
 		OnIsUseUsdCameraChanged();
 	}
@@ -607,7 +604,7 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		$usdCamerasArray[size($usdCamerasArray)] = $cameraName;
 		if ($g_rprHdrUSDCamerasCtrl != "" && $exists)
 		{
-			optionMenu -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
 		}
 	}
 

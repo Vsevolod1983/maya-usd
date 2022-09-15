@@ -35,6 +35,7 @@ static const std::string     kMtohRendererPostFix("__");
 MCallbackId ProductionSettings::_newSceneCallback = 0;
 MCallbackId ProductionSettings::_openSceneCallback = 0;
 MCallbackId ProductionSettings::_importSceneCallback = 0;
+bool ProductionSettings::_usdCameraListRefreshed = true;
 
 
 TfToken _MangleString(
@@ -767,15 +768,6 @@ UsdStageRefPtr ProductionSettings::GetUsdStage()
 
 void ProductionSettings::UsdCameraListRefresh()
 {
-	/*MObject nodeObj = GetSettingsNode();
-	if (nodeObj.isNull())
-	{
-		TF_WARN("[hdRPR production] render settings node was not found");
-		return;
-	}
-
-	MFnDependencyNode node(nodeObj);*/
-
 	ClearUsdCameraAttributes();
 
 	UsdStageRefPtr usdStageRefPtr = GetUsdStage();
@@ -838,11 +830,29 @@ UsdPrim ProductionSettings::GetUsdCameraPrim()
 	return usdStage->GetPrimAtPath(sdfpath);
 }
 
-void callback(void*)
+void ProductionSettings::attributeChangedCallback(MNodeMessage::AttributeMessage msg, MPlug & plug, MPlug & otherPlug, void* clientData)
 {
-	int i = 0;
-	i++;
+	std::string name1 = plug.name().asChar();
+	
+	if ((name1.find(".filePath") != std::string::npos) && (!_usdCameraListRefreshed))
+	{
+		_usdCameraListRefreshed = true;
+		UsdCameraListRefresh();	
+	}
+}
 
+void ProductionSettings::nodeAddedCallback(MObject& node, void* pData)
+{
+	MFnDependencyNode depNode(node);
+
+	MString str1 = depNode.absoluteName();
+	MString typeName = depNode.typeName();
+
+	if (MayaUsd::LayerManager::supportedNodeType(depNode.typeId()))
+	{
+ 		MNodeMessage::addAttributeChangedCallback(node, attributeChangedCallback);
+		_usdCameraListRefreshed = false;
+	}
 }
 
 void ProductionSettings::RegisterCallbacks()
@@ -856,6 +866,9 @@ void ProductionSettings::RegisterCallbacks()
 	CHECK_MSTATUS(status);
 
 	_importSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterImport, OnSceneCallback, NULL, &status);
+	CHECK_MSTATUS(status);
+
+	MDGMessage::addNodeAddedCallback(nodeAddedCallback);
 	CHECK_MSTATUS(status);
 }
 

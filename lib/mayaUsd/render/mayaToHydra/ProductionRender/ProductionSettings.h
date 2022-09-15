@@ -31,6 +31,9 @@
 
 #include <maya/MObject.h>
 #include <maya/MMessage.h>
+#include <maya/MDGMessage.h>
+#include <maya/MNodeMessage.h>
+
 
 #include <unordered_map>
 #include <vector>
@@ -63,12 +66,16 @@ public:
 
 private:
 	static UsdStageRefPtr GetUsdStage();
+	static void attributeChangedCallback(MNodeMessage::AttributeMessage msg, MPlug & plug, MPlug & otherPlug, void* clientData);
+	static void nodeAddedCallback(MObject& node, void* pData);
 
 private:
 	//static MString _attributePrefix;
 	static MCallbackId _newSceneCallback;
 	static MCallbackId _openSceneCallback;
 	static MCallbackId _importSceneCallback;
+
+	static bool _usdCameraListRefreshed;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
