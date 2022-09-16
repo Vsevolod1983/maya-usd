@@ -35,8 +35,11 @@ static const std::string     kMtohRendererPostFix("__");
 MCallbackId ProductionSettings::_newSceneCallback = 0;
 MCallbackId ProductionSettings::_openSceneCallback = 0;
 MCallbackId ProductionSettings::_importSceneCallback = 0;
-bool ProductionSettings::_usdCameraListRefreshed = true;
+MCallbackId ProductionSettings::_beforeOpenSceneCallback = 0;
+MCallbackId ProductionSettings::_nodeAddedCallback = 0;
 
+bool ProductionSettings::_usdCameraListRefreshed = true;
+bool ProductionSettings::_IsOpeningScene = false;
 
 TfToken _MangleString(
 	const std::string& settingKey,
@@ -727,7 +730,7 @@ void ProductionSettings::CheckRenderGlobals()
 
 void ProductionSettings::ClearUsdCameraAttributes()
 {
-	MGlobal::executeCommand("HdRpr_clearUSDCameras();");
+	MGlobal::executeCommand("HdRpr_clearUSDCameras();"); 
 }
 
 MayaUsdProxyShapeBase* ProductionSettings::GetMayaUsdProxyShapeBase()
@@ -798,6 +801,11 @@ void ProductionSettings::UsdCameraListRefresh()
 
 void ProductionSettings::OnSceneCallback(void* pbCallCheckRenderGlobals)
 {
+	if (_IsOpeningScene)
+	{
+		_IsOpeningScene = false;
+	}
+
 	if (pbCallCheckRenderGlobals)
 	{
 		CheckRenderGlobals();
@@ -832,9 +840,14 @@ UsdPrim ProductionSettings::GetUsdCameraPrim()
 
 void ProductionSettings::attributeChangedCallback(MNodeMessage::AttributeMessage msg, MPlug & plug, MPlug & otherPlug, void* clientData)
 {
+	if (_IsOpeningScene)
+	{
+		return;
+	}
+
 	std::string name1 = plug.name().asChar();
 	
-	if ((name1.find(".filePath") != std::string::npos) && (!_usdCameraListRefreshed))
+	if ((name1.find(".filePath") != std::string::npos) && (!_usdCameraListRefreshed) && (msg == MNodeMessage::AttributeMessage::kIncomingDirection))
 	{
 		_usdCameraListRefreshed = true;
 		UsdCameraListRefresh();	
@@ -843,6 +856,11 @@ void ProductionSettings::attributeChangedCallback(MNodeMessage::AttributeMessage
 
 void ProductionSettings::nodeAddedCallback(MObject& node, void* pData)
 {
+	if (_IsOpeningScene)
+	{
+		return;
+	}
+
 	MFnDependencyNode depNode(node);
 
 	MString str1 = depNode.absoluteName();
@@ -853,6 +871,11 @@ void ProductionSettings::nodeAddedCallback(MObject& node, void* pData)
  		MNodeMessage::addAttributeChangedCallback(node, attributeChangedCallback);
 		_usdCameraListRefreshed = false;
 	}
+}
+
+void ProductionSettings::OnBeforeOpenCallback(void* pData)
+{
+	_IsOpeningScene = true;
 }
 
 void ProductionSettings::RegisterCallbacks()
@@ -868,7 +891,10 @@ void ProductionSettings::RegisterCallbacks()
 	_importSceneCallback = MSceneMessage::addCallback(MSceneMessage::kAfterImport, OnSceneCallback, NULL, &status);
 	CHECK_MSTATUS(status);
 
-	MDGMessage::addNodeAddedCallback(nodeAddedCallback);
+	_beforeOpenSceneCallback = MSceneMessage::addCallback(MSceneMessage::kBeforeOpen, OnBeforeOpenCallback, NULL, &status);
+	CHECK_MSTATUS(status);
+
+	_nodeAddedCallback = MDGMessage::addNodeAddedCallback(nodeAddedCallback);
 	CHECK_MSTATUS(status);
 }
 
@@ -878,10 +904,14 @@ void ProductionSettings::UnregisterCallbacks()
 		MSceneMessage::removeCallback(_newSceneCallback);
 		MSceneMessage::removeCallback(_openSceneCallback);
 		MSceneMessage::removeCallback(_importSceneCallback);
+		MSceneMessage::removeCallback(_beforeOpenSceneCallback);
+		MSceneMessage::removeCallback(_nodeAddedCallback);
 
 		_newSceneCallback = 0;
 		_openSceneCallback = 0;
 		_importSceneCallback = 0;
+		_beforeOpenSceneCallback = 0;
+		_nodeAddedCallback = 0;
 	}
 }
 

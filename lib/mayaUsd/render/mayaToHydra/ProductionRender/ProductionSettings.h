@@ -69,13 +69,19 @@ private:
 	static void attributeChangedCallback(MNodeMessage::AttributeMessage msg, MPlug & plug, MPlug & otherPlug, void* clientData);
 	static void nodeAddedCallback(MObject& node, void* pData);
 
+	static void OnBeforeOpenCallback(void* );
+
 private:
 	//static MString _attributePrefix;
 	static MCallbackId _newSceneCallback;
 	static MCallbackId _openSceneCallback;
 	static MCallbackId _importSceneCallback;
 
+	static MCallbackId _beforeOpenSceneCallback;
+	static MCallbackId _nodeAddedCallback;
+
 	static bool _usdCameraListRefreshed;
+	static bool _IsOpeningScene;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

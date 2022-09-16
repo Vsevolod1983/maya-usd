@@ -511,6 +511,18 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		renderer - edit - addGlobalsTab "Camera" "createRprUsdRenderCameraTab" "updateRprUsdRenderCameraTab" rprUsdRender;
 	}
 
+	proc string GetCameraSelectedAttribute()
+	{
+		string $value = `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected`;
+		return $value;
+	}
+
+	proc SetCameraSelectedAttribute(string $value)
+	{
+		print("Here 333 : " + $value + "\n");
+		setAttr -type "string" defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected $value;
+	}
+
 	global proc string rprUsdRenderCmd(int $resolution0, int $resolution1,
 		int $doShadows, int $doGlowPass, string $camera, string $option)
 	{
@@ -554,7 +566,7 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 
 		columnLayout -w 375 -adjustableColumn true rprmayausd_cameracolumn;
 		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera" -changeCommand "OnIsUseUsdCameraChanged";
-		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: "`;
+		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: " -changeCommand "OnUsdCameraChanged"`;
 		setParent ..;
 
 		for ($i = 0; $i < size($usdCamerasArray); $i++) 
@@ -563,12 +575,27 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
 		}
 
+		$value = GetCameraSelectedAttribute();
+		if ($value != "")
+		{
+			optionMenu -e -v $value $g_rprHdrUSDCamerasCtrl; 
+		}
+
 		OnIsUseUsdCameraChanged();
+	}
+
+	global proc OnUsdCameraChanged()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		$value = `optionMenu -q -v $g_rprHdrUSDCamerasCtrl`;
+		SetCameraSelectedAttribute($value);
 	}
 
 	global proc OnIsUseUsdCameraChanged()
 	{
 		global string $g_rprHdrUSDCamerasCtrl;
+
 		$enabled = `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera`;
 		optionMenu -e -en $enabled $g_rprHdrUSDCamerasCtrl;
 	}
@@ -576,14 +603,28 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 	global proc updateRprUsdRenderCameraTab()
 	{
 
-	} 
+	}
+
+	global proc int IsUSDCameraCtrlExist()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		if ($g_rprHdrUSDCamerasCtrl == "")
+			return 0;
+
+		$exists = `optionMenu -q -exists $g_rprHdrUSDCamerasCtrl`;
+		return $exists; 
+	}
 
 	global proc HdRpr_clearUSDCameras()
     {
 		global string $g_rprHdrUSDCamerasCtrl;
 		global string $usdCamerasArray[];
 
-		if ($g_rprHdrUSDCamerasCtrl == "")
+		clear($usdCamerasArray);
+		//SetCameraSelectedAttribute("");
+
+		if (!IsUSDCameraCtrlExist())
 			return;
 
         $items = `optionMenu -q -itemListLong $g_rprHdrUSDCamerasCtrl`;
@@ -591,8 +632,6 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		{
             deleteUI($items);
 		}
-
-		clear($usdCamerasArray);
 	}
 
 	global proc HdRpr_AddUsdCamera(string $cameraName)
@@ -600,18 +639,22 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		global string $g_rprHdrUSDCamerasCtrl;
 		global string $usdCamerasArray[];
 
-		$exists = `optionMenu -q -exists $g_rprHdrUSDCamerasCtrl`;
 		$usdCamerasArray[size($usdCamerasArray)] = $cameraName;
-		if ($g_rprHdrUSDCamerasCtrl != "" && $exists)
+		if (IsUSDCameraCtrlExist())
 		{
 			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		}
+
+		if (GetCameraSelectedAttribute() == "")
+		{
+			print("Here 1\n");
+			SetCameraSelectedAttribute($cameraName);
 		}
 	}
 
 	global proc string GetCurrentUsdCamera()
 	{
-		global string $g_rprHdrUSDCamerasCtrl;
-		return `optionMenu -q -v $g_rprHdrUSDCamerasCtrl`;
+		return `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected`;
 	} 
 
 	registerRprUsdRenderer();
