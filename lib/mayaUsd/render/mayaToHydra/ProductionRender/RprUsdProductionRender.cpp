@@ -26,12 +26,14 @@
 #include <pxr/imaging/hdx/tokens.h>
 #include <pxr/imaging/hgi/hgi.h>
 #include <pxr/imaging/hgi/tokens.h>
+#include <pxr/usd/usdGeom/camera.h>
 
 #include <hdMaya/delegates/delegateRegistry.h>
 #include <hdMaya/delegates/sceneDelegate.h>
 #include <hdMaya/utils.h>
 #include <mayaUsd/render/px_vp20/utils.h>
 #include <mayaUsd/utils/hash.h>
+
 
 #include <pxr/base/tf/debug.h>
 #include <thread>
@@ -385,7 +387,8 @@ void RprUsdProductionRender::ClearHydraResources()
 
 MStatus RprUsdProductionRender::Render()
 {
-	auto renderFrame = [&](bool markTime = false) {
+	auto renderFrame = [&](bool markTime = false) 
+	{
 		HdTaskSharedPtrVector tasks = _taskController->GetRenderingTasks();
 
 		SdfPath path;
@@ -414,22 +417,39 @@ MStatus RprUsdProductionRender::Render()
 
 	MStatus  status;
 
-	MFnCamera fnCamera(_camPath.node());
+	UsdPrim cameraPrim = ProductionSettings::GetUsdCameraPrim();
+	bool isUsdCamera = ProductionSettings::IsUSDCameraToUse() && cameraPrim.IsValid();
 
-	// From Maya Documentation: Returns the orthographic or perspective projection matrix for the camera. 
-	// The projection matrix that maya's software renderer uses is almost identical to the OpenGL projection matrix. 
-	// The difference is that maya uses a left hand coordinate system and so the entries [2][2] and [3][2] are negated.
-	MFloatMatrix projMatrix = fnCamera.projectionMatrix();
-	projMatrix[2][2] = -projMatrix[2][2];
-	projMatrix[3][2] = -projMatrix[3][2];
+	if (!isUsdCamera)
+	{
+		MFnCamera fnCamera(_camPath.node());
 
-	MMatrix viewMatrix = MFnTransform(_camPath.transform()).transformationMatrix();
+		// From Maya Documentation: Returns the orthographic or perspective projection matrix for the camera.  
+		// The projection matrix that maya's software renderer uses is almost identical to the OpenGL projection matrix. 
+		// The difference is that maya uses a left hand coordinate system and so the entries [2][2] and [3][2] are negated.
+		MFloatMatrix projMatrix = fnCamera.projectionMatrix();
+		projMatrix[2][2] = -projMatrix[2][2];
+		projMatrix[3][2] = -projMatrix[3][2];
+
+		MMatrix viewMatrix = MFnTransform(_camPath.transform()).transformationMatrix().inverse();
+
+		_taskController->SetFreeCameraMatrices(
+			GetGfMatrixFromMaya(viewMatrix),
+			GetGfMatrixFromMaya(projMatrix));
+	}
+	else
+	{	
+		UsdGeomCamera usdGeomCamera(cameraPrim);
+
+		GfCamera camera = usdGeomCamera.GetCamera(ProductionSettings::GetMayaUsdProxyShapeBase()->getTime());
+
+		GfMatrix4d projectionMatrix = camera.GetFrustum().ComputeProjectionMatrix();
+		GfMatrix4d viewMatrix = camera.GetFrustum().ComputeViewMatrix();
+
+		_taskController->SetFreeCameraMatrices(viewMatrix, projectionMatrix);
+	}
 
 	_taskController->SetEnablePresentation(false);
-
-	_taskController->SetFreeCameraMatrices(
-		GetGfMatrixFromMaya(viewMatrix.inverse()),
-		GetGfMatrixFromMaya(projMatrix));
 
 	_taskController->SetRenderParams(params);
 	if (!params.camera.IsEmpty())
@@ -486,6 +506,18 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 
 		renderer - edit - addGlobalsTab "Common" "createMayaSoftwareCommonGlobalsTab" "updateMayaSoftwareCommonGlobalsTab" rprUsdRender;
 		renderer - edit - addGlobalsTab "General" "createRprUsdRenderGeneralTab" "updateRprUsdRenderGeneralTab" rprUsdRender;
+		renderer - edit - addGlobalsTab "Camera" "createRprUsdRenderCameraTab" "updateRprUsdRenderCameraTab" rprUsdRender;
+	}
+
+	proc string GetCameraSelectedAttribute()
+	{
+		string $value = `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected`;
+		return $value;
+	}
+
+	proc SetCameraSelectedAttribute(string $value)
+	{
+		setAttr -type "string" defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected $value;
 	}
 
 	global proc string rprUsdRenderCmd(int $resolution0, int $resolution1,
@@ -520,6 +552,105 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 	{
 
 	}
+
+    global string $g_rprHdrUSDCamerasCtrl;
+    global string $usdCamerasArray[];
+
+	global proc createRprUsdRenderCameraTab()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+		global string $usdCamerasArray[];
+
+		columnLayout -w 375 -adjustableColumn true rprmayausd_cameracolumn;
+		attrControlGrp -label "Enable USD Camera" -attribute "defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera" -changeCommand "OnIsUseUsdCameraChanged";
+		$g_rprHdrUSDCamerasCtrl = `optionMenu -l "USD Camera: " -changeCommand "OnUsdCameraChanged"`;
+		setParent ..;
+
+		for ($i = 0; $i < size($usdCamerasArray); $i++) 
+		{
+			$cameraName = $usdCamerasArray[$i];
+			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		}
+
+		$value = GetCameraSelectedAttribute();
+		if ($value != "")
+		{
+			optionMenu -e -v $value $g_rprHdrUSDCamerasCtrl; 
+		}
+
+		OnIsUseUsdCameraChanged();
+	}
+
+	global proc OnUsdCameraChanged()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		$value = `optionMenu -q -v $g_rprHdrUSDCamerasCtrl`;
+		SetCameraSelectedAttribute($value);
+	}
+
+	global proc OnIsUseUsdCameraChanged()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		$enabled = `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_useUSDCamera`;
+		optionMenu -e -en $enabled $g_rprHdrUSDCamerasCtrl;
+	}
+
+	global proc updateRprUsdRenderCameraTab()
+	{
+
+	}
+
+	global proc int IsUSDCameraCtrlExist()
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+
+		if ($g_rprHdrUSDCamerasCtrl == "")
+			return 0;
+
+		$exists = `optionMenu -q -exists $g_rprHdrUSDCamerasCtrl`;
+		return $exists; 
+	}
+
+	global proc HdRpr_clearUSDCameras()
+    {
+		global string $g_rprHdrUSDCamerasCtrl;
+		global string $usdCamerasArray[];
+
+		clear($usdCamerasArray);
+
+		if (!IsUSDCameraCtrlExist())
+			return;
+
+        $items = `optionMenu -q -itemListLong $g_rprHdrUSDCamerasCtrl`;
+		if (size($items) > 0)
+		{
+            deleteUI($items);
+		}
+	}
+
+	global proc HdRpr_AddUsdCamera(string $cameraName)
+	{
+		global string $g_rprHdrUSDCamerasCtrl;
+		global string $usdCamerasArray[];
+
+		$usdCamerasArray[size($usdCamerasArray)] = $cameraName;
+		if (IsUSDCameraCtrlExist())
+		{
+			menuItem -parent $g_rprHdrUSDCamerasCtrl -label $cameraName;
+		}
+
+		if (GetCameraSelectedAttribute() == "")
+		{
+			SetCameraSelectedAttribute($cameraName);
+		}
+	}
+
+	global proc string GetCurrentUsdCamera()
+	{
+		return `getAttr defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected`;
+	} 
 
 	registerRprUsdRenderer();
 )mel";
