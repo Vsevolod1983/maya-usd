@@ -535,7 +535,6 @@ std::string ProductionSettings::CreateAttributes()
 
 	TfTokenVector vec;
 	TfToken token;
-	//_CreateEnumAttribute(node, MString(g_attributePrefix.GetText()) + "Static_usdCameraSelected", vec, token, userDefaults);
 	_CreateStringAttribute(node, MString(g_attributePrefix.GetText()) + "Static_usdCameraSelected", "", userDefaults);
 
 	for (const HdRenderSettingDescriptor& attr : rendererSettingDescriptors) {
@@ -742,8 +741,7 @@ MayaUsdProxyShapeBase* ProductionSettings::GetMayaUsdProxyShapeBase()
 		fn.setObject(mobj);
 		MTypeId id = fn.typeId();
 		MString typeName = fn.typeName();
-		MString str = fn.absoluteName();
-
+		
 		MString origRTypeName = MayaUsdProxyShapeBase::typeName;
 		if (!fn.isFromReferencedFile() && (MayaUsd::LayerManager::supportedNodeType(fn.typeId()))) {
 			MayaUsdProxyShapeBase* pShape = static_cast<MayaUsdProxyShapeBase*>(fn.userNode());
@@ -862,9 +860,6 @@ void ProductionSettings::nodeAddedCallback(MObject& node, void* pData)
 	}
 
 	MFnDependencyNode depNode(node);
-
-	MString str1 = depNode.absoluteName();
-	MString typeName = depNode.typeName();
 
 	if (MayaUsd::LayerManager::supportedNodeType(depNode.typeId()))
 	{

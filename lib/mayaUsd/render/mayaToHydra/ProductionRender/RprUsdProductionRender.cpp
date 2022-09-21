@@ -447,8 +447,6 @@ MStatus RprUsdProductionRender::Render()
 		GfMatrix4d viewMatrix = camera.GetFrustum().ComputeViewMatrix();
 
 		_taskController->SetFreeCameraMatrices(viewMatrix, projectionMatrix);
-
-		//camera.getmat
 	}
 
 	_taskController->SetEnablePresentation(false);
@@ -519,7 +517,6 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 
 	proc SetCameraSelectedAttribute(string $value)
 	{
-		print("Here 333 : " + $value + "\n");
 		setAttr -type "string" defaultRenderGlobals.HdRprPlugin_Prod_Static_usdCameraSelected $value;
 	}
 
@@ -622,13 +619,12 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 		global string $usdCamerasArray[];
 
 		clear($usdCamerasArray);
-		//SetCameraSelectedAttribute("");
 
 		if (!IsUSDCameraCtrlExist())
 			return;
 
         $items = `optionMenu -q -itemListLong $g_rprHdrUSDCamerasCtrl`;
-        if (size($items) > 0)
+		if (size($items) > 0)
 		{
             deleteUI($items);
 		}
@@ -647,7 +643,6 @@ void RprUsdProductionRender::RegisterRenderer(const std::string& controlCreation
 
 		if (GetCameraSelectedAttribute() == "")
 		{
-			print("Here 1\n");
 			SetCameraSelectedAttribute($cameraName);
 		}
 	}
